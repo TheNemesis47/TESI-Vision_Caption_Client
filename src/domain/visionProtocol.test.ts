@@ -53,6 +53,63 @@ describe('buildFramePacket', () => {
 })
 
 describe('parseVisionServerMessage', () => {
+  it('riconosce la configurazione stream inviata all’apertura', () => {
+    expect(
+      parseVisionServerMessage({
+        type: 'stream_config',
+        auto_fps: 2,
+        pointing_fps: 10,
+        max_in_flight: 1,
+      }),
+    ).toEqual({
+      kind: 'message',
+      message: {
+        type: 'stream_config',
+        auto_fps: 2,
+        pointing_fps: 10,
+        max_in_flight: 1,
+      },
+    })
+  })
+
+  it('riconosce frame_done anche per un esito non completato', () => {
+    expect(
+      parseVisionServerMessage({
+        type: 'frame_done',
+        frame_id: 123,
+        outcome: 'failed',
+        next_frame_after_ms: 500,
+      }),
+    ).toEqual({
+      kind: 'message',
+      message: {
+        type: 'frame_done',
+        frame_id: 123,
+        outcome: 'failed',
+        next_frame_after_ms: 500,
+      },
+    })
+  })
+
+  it('rifiuta configurazioni stream e ACK malformati', () => {
+    expect(
+      parseVisionServerMessage({
+        type: 'stream_config',
+        auto_fps: 0,
+        pointing_fps: 10,
+        max_in_flight: 1,
+      }).kind,
+    ).toBe('invalid')
+    expect(
+      parseVisionServerMessage({
+        type: 'frame_done',
+        frame_id: 1,
+        outcome: '',
+        next_frame_after_ms: -1,
+      }).kind,
+    ).toBe('invalid')
+  })
+
   it('riconosce un audio JSON e conserva formato e frame_id', () => {
     const result = parseVisionServerMessage(
       JSON.stringify({
@@ -86,8 +143,7 @@ describe('parseVisionServerMessage', () => {
     })
 
     expect(result.kind).toBe('message')
-    if (result.kind === 'message') {
-      expect(result.message.type).toBe('detections')
+    if (result.kind === 'message' && result.message.type === 'detections') {
       expect(result.message.frame_id).toBe(7)
     }
   })

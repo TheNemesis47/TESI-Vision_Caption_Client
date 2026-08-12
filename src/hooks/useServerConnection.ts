@@ -118,10 +118,6 @@ export function useServerConnection({
 
         const result = parseVisionServerMessage(event.data)
         if (result.kind === 'message') {
-          console.debug('[WebSocket] Messaggio ricevuto', {
-            type: result.message.type,
-            frameId: result.message.frame_id,
-          })
           onMessageRef.current?.(result.message)
           return
         }

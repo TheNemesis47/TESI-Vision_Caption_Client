@@ -52,16 +52,9 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
                 const videoConstraints: boolean | MediaTrackConstraints = deviceId
                     ? {deviceId: {exact: deviceId}}
                     : true;
-                console.log('[useWebcam] Richiesta stream con constrains:', videoConstraints);
                 stream = await navigator.mediaDevices.getUserMedia({video: videoConstraints});
-                console.log('[useWebcam] ✓ Stream ottenuto:', {
-                  videoTracks: stream.getVideoTracks().length,
-                  audioTracks: stream.getAudioTracks().length,
-                  id: stream.id,
-                });
 
                 if (cancelled) {
-                    console.log('[useWebcam] Operazione cancellata, fermo stream');
                     stream.getTracks().forEach((track) => track.stop());
                     return;
                 }
@@ -72,26 +65,20 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
                 activeVideoTrack?.addEventListener?.('ended', handleTrackEnded);
 
                 if (videoElement) {
-                    console.log('[useWebcam] Assegno srcObject al video element');
                     videoElement.srcObject = stream;
 
-                    // Forza il play su iOS
                     if (videoElement.play) {
                         videoElement.play()
-                          .then(() => {
-                            console.log('[useWebcam] ✓ Video play() riuscito');
-                          })
                           .catch((err) => {
-                            console.error('[useWebcam] ✗ Video play() fallito:', err);
+                            if (cancelled) return;
+                            setIsActive(false);
+                            setError("WebcamError - avvio anteprima non riuscito: " + (err as Error).message);
                           });
                     }
 
                     setIsActive(true);
-                } else {
-                    console.error('[useWebcam] videoElement è null!');
                 }
             } catch (e) {
-                console.error('[useWebcam] Errore getUserMedia:', e);
                 if (cancelled) return;
                 setIsMirrored(false);
                 setError("WebcamError - non disponibile: " + (e as Error).message);

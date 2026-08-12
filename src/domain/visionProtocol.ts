@@ -74,10 +74,26 @@ export type PointingOverlayMessage = {
   corridor: PointingCorridorStyle
 }
 
+export type StreamConfigServerMessage = {
+  type: 'stream_config'
+  auto_fps: number
+  pointing_fps: number
+  max_in_flight: number
+}
+
+export type FrameDoneServerMessage = {
+  type: 'frame_done'
+  frame_id: number
+  outcome: string
+  next_frame_after_ms: number
+}
+
 export type VisionServerMessage =
   | AudioServerMessage
   | DetectionsServerMessage
   | PointingOverlayMessage
+  | StreamConfigServerMessage
+  | FrameDoneServerMessage
 
 export type VisionMessageParseResult =
   | { kind: 'message'; message: VisionServerMessage }
@@ -267,6 +283,58 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
 
   if (typeof parsed.type !== 'string') {
     return { kind: 'invalid', reason: 'Campo type mancante' }
+  }
+
+  if (parsed.type === 'stream_config') {
+    if (!isFiniteNumber(parsed.auto_fps) || parsed.auto_fps <= 0) {
+      return { kind: 'invalid', reason: 'stream_config con auto_fps non valido' }
+    }
+    if (!isFiniteNumber(parsed.pointing_fps) || parsed.pointing_fps <= 0) {
+      return { kind: 'invalid', reason: 'stream_config con pointing_fps non valido' }
+    }
+    if (
+      !isFiniteNumber(parsed.max_in_flight) ||
+      !Number.isInteger(parsed.max_in_flight) ||
+      parsed.max_in_flight < 1
+    ) {
+      return { kind: 'invalid', reason: 'stream_config con max_in_flight non valido' }
+    }
+
+    return {
+      kind: 'message',
+      message: {
+        type: 'stream_config',
+        auto_fps: parsed.auto_fps,
+        pointing_fps: parsed.pointing_fps,
+        max_in_flight: parsed.max_in_flight,
+      },
+    }
+  }
+
+  if (parsed.type === 'frame_done') {
+    const frameId = parseFrameId(parsed.frame_id)
+    if (frameId === null || frameId < 1) {
+      return { kind: 'invalid', reason: 'frame_done con frame_id non valido' }
+    }
+    if (typeof parsed.outcome !== 'string' || parsed.outcome.trim().length === 0) {
+      return { kind: 'invalid', reason: 'frame_done con outcome non valido' }
+    }
+    if (!isNonNegativeNumber(parsed.next_frame_after_ms)) {
+      return {
+        kind: 'invalid',
+        reason: 'frame_done con next_frame_after_ms non valido',
+      }
+    }
+
+    return {
+      kind: 'message',
+      message: {
+        type: 'frame_done',
+        frame_id: frameId,
+        outcome: parsed.outcome,
+        next_frame_after_ms: parsed.next_frame_after_ms,
+      },
+    }
   }
 
   if (parsed.type === 'audio') {
