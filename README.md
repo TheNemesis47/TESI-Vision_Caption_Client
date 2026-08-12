@@ -1,5 +1,16 @@
 # React + TypeScript + Vite
 
+## Connessione al backend
+
+In produzione il client usa automaticamente lo stesso host della pagina e apre il
+WebSocket su `/ws/vision`. Per esempio, una pagina pubblicata come
+`https://vision.example.com` si collega a
+`wss://vision.example.com/ws/vision`. Questa configurazione è adatta a un unico
+origin HTTPS esposto tramite Cloudflare Tunnel.
+
+`VITE_VISION_WS_URL` rimane disponibile come override per lo sviluppo con
+frontend e backend su host diversi. Vedi `.env.example`.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

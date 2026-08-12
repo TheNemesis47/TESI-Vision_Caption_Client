@@ -25,11 +25,14 @@ const maximumReconnectDelayMs = 10000
 export const buildWebSocketUrl = (
   rawBaseUrl: string | undefined = import.meta.env.VITE_VISION_WS_URL,
   pageProtocol: string = typeof window === 'undefined' ? 'http:' : window.location.protocol,
+  pageHost: string = typeof window === 'undefined' ? '' : window.location.host,
 ) => {
-  if (!rawBaseUrl) return null
+  const configuredBaseUrl = rawBaseUrl?.trim()
+  const baseUrl = configuredBaseUrl || (pageHost ? `${pageProtocol}//${pageHost}` : null)
+  if (!baseUrl) return null
 
   try {
-    const url = new URL(rawBaseUrl)
+    const url = new URL(baseUrl)
     const securePage = pageProtocol === 'https:'
     const secureEndpoint = url.protocol === 'https:' || url.protocol === 'wss:'
     url.protocol = securePage || secureEndpoint ? 'wss:' : 'ws:'

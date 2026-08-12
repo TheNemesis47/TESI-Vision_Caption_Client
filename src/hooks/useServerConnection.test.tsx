@@ -45,6 +45,18 @@ class FakeWebSocket {
 }
 
 describe('buildWebSocketUrl', () => {
+  it('usa lo stesso host della pagina quando non è configurato un endpoint', () => {
+    expect(buildWebSocketUrl('', 'https:', 'vision.example.test')).toBe(
+      'wss://vision.example.test/ws/vision',
+    )
+  })
+
+  it('usa ws same-origin durante lo sviluppo HTTP', () => {
+    expect(buildWebSocketUrl('', 'http:', 'localhost:5173')).toBe(
+      'ws://localhost:5173/ws/vision',
+    )
+  })
+
   it('usa wss su pagina HTTPS e forza /ws/vision', () => {
     expect(buildWebSocketUrl('http://example.test:8765/old?token=x', 'https:')).toBe(
       'wss://example.test:8765/ws/vision',
@@ -55,6 +67,10 @@ describe('buildWebSocketUrl', () => {
     expect(buildWebSocketUrl('http://example.test:8765', 'http:')).toBe(
       'ws://example.test:8765/ws/vision',
     )
+  })
+
+  it('rifiuta un override configurato ma non valido', () => {
+    expect(buildWebSocketUrl('non è un URL', 'https:', 'vision.example.test')).toBeNull()
   })
 })
 
