@@ -1,0 +1,115 @@
+.caption-mode-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.caption-mode-fieldset legend {
+  margin-bottom: 10px;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.caption-mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.caption-mode-option {
+  position: relative;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 2px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.caption-mode-option:hover {
+  border-color: #64748b;
+}
+
+.caption-mode-option:has(input:focus-visible) {
+  outline: 3px solid rgba(37, 99, 235, 0.32);
+  outline-offset: 2px;
+}
+
+.caption-mode-option.is-selected {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.caption-mode-option input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.caption-mode-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+}
+
+.caption-mode-option-copy strong {
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.caption-mode-option-copy span {
+  font-size: 0.78rem;
+}
+
+.caption-mode-check {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  transform: translateY(-50%);
+}
+
+.caption-mode-description {
+  min-height: 3em;
+  margin-top: 10px;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.caption-mode-fieldset:disabled {
+  opacity: 0.62;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caption-mode-option {
+    transition: none;
+  }
+}

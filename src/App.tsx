@@ -1,12 +1,10 @@
-import { useState } from 'react'
-import { WebcamView } from './components/WebcamView.tsx'
 import './App.css'
+import { Dashboard } from './components/Dashboard'
 
 function App() {
-
   return (
     <>
-      <WebcamView/>
+      <Dashboard />
     </>
   )
 }
