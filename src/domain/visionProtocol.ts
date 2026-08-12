@@ -286,10 +286,14 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
   }
 
   if (parsed.type === 'stream_config') {
-    if (!isFiniteNumber(parsed.auto_fps) || parsed.auto_fps <= 0) {
+    const nestedFps = isRecord(parsed.fps) ? parsed.fps : null
+    const autoFps = parsed.auto_fps ?? nestedFps?.AUTO
+    const pointingFps = parsed.pointing_fps ?? nestedFps?.POINTING
+
+    if (!isFiniteNumber(autoFps) || autoFps <= 0) {
       return { kind: 'invalid', reason: 'stream_config con auto_fps non valido' }
     }
-    if (!isFiniteNumber(parsed.pointing_fps) || parsed.pointing_fps <= 0) {
+    if (!isFiniteNumber(pointingFps) || pointingFps <= 0) {
       return { kind: 'invalid', reason: 'stream_config con pointing_fps non valido' }
     }
     if (
@@ -304,8 +308,8 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
       kind: 'message',
       message: {
         type: 'stream_config',
-        auto_fps: parsed.auto_fps,
-        pointing_fps: parsed.pointing_fps,
+        auto_fps: autoFps,
+        pointing_fps: pointingFps,
         max_in_flight: parsed.max_in_flight,
       },
     }
@@ -313,13 +317,16 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
 
   if (parsed.type === 'frame_done') {
     const frameId = parseFrameId(parsed.frame_id)
+    const nextFrameAfterMs =
+      parsed.next_frame_after_ms ?? parsed.min_frame_interval_ms
+    const outcome =
+      typeof parsed.outcome === 'string' && parsed.outcome.trim().length > 0
+        ? parsed.outcome
+        : 'completed'
     if (frameId === null || frameId < 1) {
       return { kind: 'invalid', reason: 'frame_done con frame_id non valido' }
     }
-    if (typeof parsed.outcome !== 'string' || parsed.outcome.trim().length === 0) {
-      return { kind: 'invalid', reason: 'frame_done con outcome non valido' }
-    }
-    if (!isNonNegativeNumber(parsed.next_frame_after_ms)) {
+    if (!isNonNegativeNumber(nextFrameAfterMs)) {
       return {
         kind: 'invalid',
         reason: 'frame_done con next_frame_after_ms non valido',
@@ -331,8 +338,8 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
       message: {
         type: 'frame_done',
         frame_id: frameId,
-        outcome: parsed.outcome,
-        next_frame_after_ms: parsed.next_frame_after_ms,
+        outcome,
+        next_frame_after_ms: nextFrameAfterMs,
       },
     }
   }

@@ -9,6 +9,7 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isActive, setIsActive] = useState<boolean>(false);
     const [isMirrored, setIsMirrored] = useState<boolean>(false);
+    const [activeDeviceId, setActiveDeviceId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -21,12 +22,14 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
             if (cancelled) return;
             setIsActive(false);
             setIsMirrored(false);
+            setActiveDeviceId('');
         };
 
         queueMicrotask(() => {
             if (cancelled) return;
             setIsActive(false);
             setIsMirrored(false);
+            setActiveDeviceId('');
             setError(null);
         });
 
@@ -61,7 +64,9 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
 
                 activeVideoTrack = stream.getVideoTracks()[0] ?? null;
                 const facingMode = activeVideoTrack?.getSettings?.().facingMode;
+                const nextActiveDeviceId = activeVideoTrack?.getSettings?.().deviceId;
                 setIsMirrored(facingMode === 'user');
+                setActiveDeviceId(nextActiveDeviceId ?? deviceId ?? '');
                 activeVideoTrack?.addEventListener?.('ended', handleTrackEnded);
 
                 if (videoElement) {
@@ -81,6 +86,7 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
             } catch (e) {
                 if (cancelled) return;
                 setIsMirrored(false);
+                setActiveDeviceId('');
                 setError("WebcamError - non disponibile: " + (e as Error).message);
             }
         };
@@ -97,7 +103,8 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
             stream?.getTracks().forEach((track) => track.stop());
             setIsActive(false);
             setIsMirrored(false);
+            setActiveDeviceId('');
         }
     }, [deviceId, enabled])
-    return { videoRef, isActive, isMirrored, error };
+    return { videoRef, isActive, isMirrored, activeDeviceId, error };
 }

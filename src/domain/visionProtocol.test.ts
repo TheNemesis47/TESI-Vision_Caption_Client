@@ -72,6 +72,26 @@ describe('parseVisionServerMessage', () => {
     })
   })
 
+  it('normalizza il formato stream_config effettivo del backend', () => {
+    expect(
+      parseVisionServerMessage({
+        type: 'stream_config',
+        protocol_version: 1,
+        fps: { AUTO: 2, POINTING: 10 },
+        max_in_flight: 1,
+        max_buffered_amount_bytes: 262144,
+      }),
+    ).toEqual({
+      kind: 'message',
+      message: {
+        type: 'stream_config',
+        auto_fps: 2,
+        pointing_fps: 10,
+        max_in_flight: 1,
+      },
+    })
+  })
+
   it('riconosce frame_done anche per un esito non completato', () => {
     expect(
       parseVisionServerMessage({
@@ -91,6 +111,25 @@ describe('parseVisionServerMessage', () => {
     })
   })
 
+  it('normalizza il frame_done effettivo del backend', () => {
+    expect(
+      parseVisionServerMessage({
+        type: 'frame_done',
+        frame_id: 123,
+        processing_ms: 842,
+        min_frame_interval_ms: 500,
+      }),
+    ).toEqual({
+      kind: 'message',
+      message: {
+        type: 'frame_done',
+        frame_id: 123,
+        outcome: 'completed',
+        next_frame_after_ms: 500,
+      },
+    })
+  })
+
   it('rifiuta configurazioni stream e ACK malformati', () => {
     expect(
       parseVisionServerMessage({
@@ -104,7 +143,7 @@ describe('parseVisionServerMessage', () => {
       parseVisionServerMessage({
         type: 'frame_done',
         frame_id: 1,
-        outcome: '',
+        outcome: 'failed',
         next_frame_after_ms: -1,
       }).kind,
     ).toBe('invalid')

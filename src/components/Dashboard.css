@@ -73,14 +73,24 @@
 }
 
 .server-status,
-.mode-control {
+.mode-control,
+.camera-device-control {
   pointer-events: auto;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(11, 14, 18, 0.86);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
+.camera-status-stack {
+  width: min(46vw, 210px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .server-status {
+  width: 100%;
   min-height: 48px;
   max-width: min(48vw, 210px);
   display: flex;
@@ -88,6 +98,53 @@
   gap: 9px;
   padding: 7px 12px;
   border-radius: 14px;
+}
+
+.server-status.is-offline .server-status-dot {
+  border-color: rgba(255, 115, 115, 0.38);
+  background: #ff7373;
+  box-shadow: 0 0 0 4px rgba(255, 115, 115, 0.14);
+}
+
+.camera-device-control {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 9px;
+  border-radius: 14px;
+}
+
+.camera-device-control svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  fill: #d7dbe1;
+}
+
+.camera-device-control select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.camera-device-control:has(select:focus-visible) {
+  outline: 3px solid #f2b84b;
+  outline-offset: 2px;
+}
+
+.camera-device-control select:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
 }
 
 .server-status-dot {
@@ -183,7 +240,7 @@
 .activity-status {
   position: absolute;
   z-index: 3;
-  top: max(78px, calc(env(safe-area-inset-top) + 66px));
+  top: max(132px, calc(env(safe-area-inset-top) + 120px));
   left: 50%;
   max-width: calc(100% - 32px);
   min-height: 36px;

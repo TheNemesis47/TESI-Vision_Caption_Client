@@ -7,6 +7,7 @@ import {
 import { usePointingOverlay } from '../hooks/usePointingOverlay'
 import { useServerConnection } from '../hooks/useServerConnection'
 import { useWebcam } from '../hooks/useWebcam'
+import { useCameraDevices } from '../hooks/useCameraDevices'
 import {
   getConfiguredFrameIntervalMs,
   LatestFrameBuffer,
@@ -50,6 +51,7 @@ const jpegQuality = Math.min(
   1,
 )
 const sentMetadataRetention = 64
+const streamConfigTimeoutMs = 5000
 
 const writeAscii = (view: DataView, offset: number, value: string) => {
   for (let index = 0; index < value.length; index += 1) {
@@ -107,6 +109,7 @@ export function Dashboard() {
   const audioUnlockedRef = useRef(false)
 
   const [captionMode, setCaptionMode] = useState<CaptionMode>('AUTO')
+  const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [caption, setCaption] = useState('')
   const [isCaptureRunning, setIsCaptureRunning] = useState(false)
   const [inactiveCaptureState, setInactiveCaptureState] =
@@ -121,8 +124,15 @@ export function Dashboard() {
     apply: applyPointingOverlay,
     clear: clearPointingOverlay,
   } = usePointingOverlay()
-  const { videoRef, isActive: isWebcamActive, isMirrored, error: webcamError } =
-    useWebcam({ enabled: true })
+  const {
+    videoRef,
+    isActive: isWebcamActive,
+    isMirrored,
+    activeDeviceId,
+    error: webcamError,
+  } = useWebcam({ deviceId: selectedDeviceId || undefined, enabled: true })
+  const { devices: cameraDevices, error: cameraDevicesError } =
+    useCameraDevices(isWebcamActive)
 
   const getAudioQueue = useCallback(() => {
     if (audioQueueRef.current) return audioQueueRef.current
@@ -314,6 +324,7 @@ export function Dashboard() {
   const handleServerMessage = useCallback(
     (message: VisionServerMessage) => {
       if (message.type === 'stream_config') {
+        setSessionError(null)
         setStreamConfig(message)
         frameGateRef.current.allowNowWhenIdle()
         return
@@ -376,6 +387,7 @@ export function Dashboard() {
   }, [handleServerMessage])
 
   const handleServerDisconnect = useCallback(() => {
+    setSessionError(null)
     setStreamConfig(null)
     resetFrameFlow()
     stopAudioPlayback()
@@ -386,6 +398,21 @@ export function Dashboard() {
   useEffect(() => {
     serverDisconnectRef.current = handleServerDisconnect
   }, [handleServerDisconnect])
+
+  useEffect(() => {
+    if (
+      !isCaptureRunning ||
+      serverConnectionStatus !== 'open' ||
+      streamConfig
+    ) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSessionError('Configurazione server non compatibile')
+    }, streamConfigTimeoutMs)
+    return () => window.clearTimeout(timeoutId)
+  }, [isCaptureRunning, serverConnectionStatus, streamConfig])
 
   const unlockAudioPlayback = useCallback(async () => {
     if (audioUnlockedRef.current) return true
@@ -479,6 +506,16 @@ export function Dashboard() {
     [captureLatestFrame, clearDispatchRetry, clearPointingOverlay, stopAudioPlayback],
   )
 
+  const handleCameraDeviceChange = useCallback(
+    (deviceId: string) => {
+      if (isCaptureRunning || !deviceId) return
+      setCaption('')
+      setSessionError(null)
+      setSelectedDeviceId(deviceId)
+    },
+    [isCaptureRunning],
+  )
+
   useEffect(() => {
     const latestFrameBuffer = latestFrameRef.current
     const frameGate = frameGateRef.current
@@ -496,7 +533,9 @@ export function Dashboard() {
       ? 'error'
       : serverConnectionStatus === 'open' && streamConfig
         ? 'streaming'
-        : 'connecting'
+        : serverConnectionStatus === 'closed'
+          ? 'error'
+          : 'connecting'
     : inactiveCaptureState
   const hasActivePointing =
     captionMode === 'POINTING' &&
@@ -507,8 +546,12 @@ export function Dashboard() {
       ? 'Fotocamera non disponibile'
       : !isWebcamActive
         ? 'Avvio fotocamera'
-        : isCaptureRunning && !streamConfig
-          ? 'Connessione al server'
+        : isCaptureRunning && serverConnectionStatus === 'closed'
+          ? 'Disconnesso'
+          : isCaptureRunning && serverConnectionStatus === 'connecting'
+            ? 'Connessione al server'
+            : isCaptureRunning && !streamConfig
+              ? 'Sincronizzazione'
           : isDescribing
             ? 'Descrizione in corso'
             : hasActivePointing
@@ -530,10 +573,13 @@ export function Dashboard() {
   const serverTone =
     serverConnectionStatus === 'open' && streamConfig
       ? 'is-online'
+      : isCaptureRunning && serverConnectionStatus === 'closed'
+        ? 'is-offline'
       : isCaptureRunning
         ? 'is-pending'
         : 'is-idle'
   const startDisabled = !isWebcamActive || Boolean(webcamError) || !webSocketUrl
+  const selectedCameraId = selectedDeviceId || activeDeviceId || ''
 
   return (
     <div className="vision-app">
@@ -552,12 +598,49 @@ export function Dashboard() {
         <div className="camera-scrim camera-scrim-bottom" aria-hidden="true" />
 
         <header className="camera-topbar">
-          <div className={`server-status ${serverTone}`} role="status" aria-live="polite">
-            <span className="server-status-dot" aria-hidden="true" />
-            <span className="server-status-copy">
-              <strong>Server</strong>
-              <span>{serverLabel}</span>
-            </span>
+          <div className="camera-status-stack">
+            <div className={`server-status ${serverTone}`} role="status" aria-live="polite">
+              <span className="server-status-dot" aria-hidden="true" />
+              <span className="server-status-copy">
+                <strong>Server</strong>
+                <span>{serverLabel}</span>
+              </span>
+            </div>
+
+            <div className="camera-device-control">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14.5 6.5 16 4h2l1.5 2.5H21a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h11.5ZM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+              </svg>
+              <label className="sr-only" htmlFor="camera-device">
+                Fotocamera
+              </label>
+              <select
+                id="camera-device"
+                value={selectedCameraId}
+                onChange={(event) => handleCameraDeviceChange(event.target.value)}
+                disabled={isCaptureRunning || cameraDevices.length === 0}
+                aria-describedby={cameraDevicesError ? 'camera-device-error' : undefined}
+              >
+                {cameraDevices.length === 0 ? (
+                  <option value="">
+                    {cameraDevicesError
+                      ? 'Selezione non disponibile'
+                      : 'Ricerca fotocamere…'}
+                  </option>
+                ) : (
+                  cameraDevices.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            {cameraDevicesError && (
+              <span className="sr-only" id="camera-device-error">
+                {cameraDevicesError}
+              </span>
+            )}
           </div>
 
           <fieldset className="mode-control">
@@ -595,7 +678,7 @@ export function Dashboard() {
         )}
 
         <div
-          className={`activity-status${captureState === 'streaming' ? ' is-active' : ''}${sessionError || webcamError ? ' is-error' : ''}`}
+          className={`activity-status${captureState === 'streaming' ? ' is-active' : ''}${captureState === 'error' || sessionError || webcamError ? ' is-error' : ''}`}
           role="status"
           aria-live="polite"
           aria-atomic="true"
