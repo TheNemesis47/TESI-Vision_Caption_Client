@@ -1,0 +1,182 @@
+/* La guida della prima apertura. Copre l'anteprima perché finché parla non c'è
+   nient'altro da fare, e i bersagli restano grandi: chi la usa spesso non vede
+   bene dove sta premendo. */
+.tutorial-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(4, 10, 14, 0.92);
+}
+
+.tutorial-card {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 26px 24px 24px;
+  border-radius: 18px;
+  background: #101a20;
+  color: #f2f7f9;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.tutorial-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.tutorial-progress {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8aa4ad;
+}
+
+.tutorial-skip {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #33484f;
+  border-radius: 10px;
+  background: transparent;
+  color: #cfe0e5;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.tutorial-title {
+  margin: 0 0 10px;
+  font-size: 25px;
+  line-height: 1.2;
+}
+
+.tutorial-title:focus-visible {
+  outline: 3px solid #56c8d8;
+  outline-offset: 4px;
+}
+
+.tutorial-body {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+  color: #d6e4e9;
+}
+
+.tutorial-control {
+  margin-top: 20px;
+}
+
+.tutorial-control label,
+.tutorial-control legend {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #8aa4ad;
+}
+
+.tutorial-control select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #33484f;
+  border-radius: 10px;
+  background: #16242b;
+  color: #f2f7f9;
+  font-size: 16px;
+}
+
+.tutorial-modes {
+  display: block;
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.tutorial-modes label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  margin-bottom: 10px;
+  padding: 0 14px;
+  border: 1px solid #33484f;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 500;
+  color: #f2f7f9;
+  cursor: pointer;
+}
+
+.tutorial-modes label.is-selected {
+  border-color: #56c8d8;
+  background: rgba(86, 200, 216, 0.14);
+}
+
+.tutorial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.tutorial-next {
+  flex: 1 1 100%;
+  min-height: 54px;
+  border: 0;
+  border-radius: 12px;
+  background: #56c8d8;
+  color: #06181d;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tutorial-secondary {
+  flex: 1 1 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #33484f;
+  border-radius: 12px;
+  background: transparent;
+  color: #cfe0e5;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* Il pulsante che riapre la guida, accanto ai controlli della fotocamera.
+   La barra in alto ha pointer-events: none, perché lascia passare i tocchi
+   sull'anteprima: ogni comando che ci sta dentro deve riaccenderli, o si vede
+   ma non si preme. */
+.guide-button {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(8, 20, 26, 0.55);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.guide-button svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-backdrop {
+    transition: none;
+  }
+}

@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Dashboard from './Dashboard'
+import { rememberTutorialSeen } from '../domain/tutorial'
 
 const videoRef = createRef<HTMLVideoElement>()
 
@@ -16,16 +17,20 @@ vi.mock('../hooks/useWebcam', () => ({
   }),
 }))
 
-vi.mock('../hooks/useCameraDevices', () => ({
-  useCameraDevices: () => ({
-    devices: [
-      { deviceId: 'camera-back', label: 'Fotocamera posteriore' },
-      { deviceId: 'camera-front', label: 'Fotocamera anteriore' },
-    ],
-    error: null,
-    refresh: vi.fn(),
-  }),
-}))
+vi.mock('../hooks/useCameraDevices', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useCameraDevices')>()
+  return {
+    ...actual,
+    useCameraDevices: () => ({
+      devices: [
+        { deviceId: 'camera-back', label: 'Fotocamera posteriore' },
+        { deviceId: 'camera-front', label: 'Fotocamera anteriore' },
+      ],
+      error: null,
+      refresh: vi.fn(),
+    }),
+  }
+})
 
 vi.mock('../hooks/useServerConnection', () => ({
   useServerConnection: () => ({
@@ -40,6 +45,9 @@ vi.mock('../hooks/useServerConnection', () => ({
 describe('Dashboard end-user', () => {
   beforeEach(() => {
     videoRef.current = null
+    window.localStorage.clear()
+    // La vista ordinaria è quella di chi la guida l'ha già vista.
+    rememberTutorialSeen()
   })
 
   it('monta solo anteprima e controlli essenziali, senza renderer diagnostici', () => {
@@ -56,6 +64,7 @@ describe('Dashboard end-user', () => {
 
     expect(container.querySelector('.detections-layer')).not.toBeInTheDocument()
     expect(container.querySelector('.pointing-overlay-layer')).not.toBeInTheDocument()
+    expect(container.querySelector('.hand-landmarks-layer')).not.toBeInTheDocument()
     expect(container.querySelector('.bounding-box')).not.toBeInTheDocument()
     expect(container.querySelector('.log-panel')).not.toBeInTheDocument()
     expect(container.querySelector('canvas')).not.toBeInTheDocument()
@@ -69,5 +78,34 @@ describe('Dashboard end-user', () => {
     await user.selectOptions(cameraSelect, 'camera-front')
 
     expect(cameraSelect).toHaveValue('camera-front')
+  })
+})
+
+describe('Dashboard e la guida', () => {
+  beforeEach(() => {
+    videoRef.current = null
+    window.localStorage.clear()
+  })
+
+  it('alla prima apertura la guida si presenta da sola', () => {
+    render(<Dashboard />)
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Guida rapida' })).toBeInTheDocument()
+  })
+
+  it('saltata una volta non torna, e il pulsante con il libro la riapre', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Dashboard />)
+
+    await user.click(screen.getByRole('button', { name: 'Salta la guida' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    unmount()
+    render(<Dashboard />)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Rivedi la guida' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 })

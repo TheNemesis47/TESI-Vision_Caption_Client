@@ -7,7 +7,10 @@ import {
 import { usePointingOverlay } from '../hooks/usePointingOverlay'
 import { useServerConnection } from '../hooks/useServerConnection'
 import { useWebcam } from '../hooks/useWebcam'
-import { useCameraDevices } from '../hooks/useCameraDevices'
+import {
+  resolveAvailableCameraId,
+  useCameraDevices,
+} from '../hooks/useCameraDevices'
 import {
   getConfiguredFrameIntervalMs,
   LatestFrameBuffer,
@@ -25,6 +28,15 @@ import {
   type StreamConfigServerMessage,
   type VisionServerMessage,
 } from '../domain/visionProtocol'
+import {
+  isDiagnosticOverlayEnabled,
+  toOverlayBoxes,
+  type OverlayBox,
+} from '../domain/detectionOverlay'
+import { calculatePreviewContentRect } from './pointingOverlayGeometry'
+import HandLandmarksLayer from './HandLandmarksLayer'
+import TutorialOverlay from './TutorialOverlay'
+import { useTutorial } from '../hooks/useTutorial'
 import { AudioPlaybackQueue } from '../services/audioPlaybackQueue'
 
 type PendingFrame = {
@@ -44,6 +56,7 @@ const maximumBufferedAmount = Math.min(
   ),
   MAX_WEBSOCKET_BUFFERED_AMOUNT,
 )
+const showDiagnosticOverlays = isDiagnosticOverlayEnabled()
 const frameMaxWidth = readPositiveNumber(import.meta.env.VITE_FRAME_MAX_WIDTH, 1280)
 const frameMaxHeight = readPositiveNumber(import.meta.env.VITE_FRAME_MAX_HEIGHT, 720)
 const jpegQuality = Math.min(
@@ -97,7 +110,6 @@ export function Dashboard() {
   const modeChangeCutoffFrameIdRef = useRef(1)
   const lastAudioFrameIdRef = useRef<number | null>(null)
   const sentFrameMetadataRef = useRef<Map<number, SentFrameMetadata>>(new Map())
-  const latestDetectionsRef = useRef<unknown[]>([])
   const latestFrameRef = useRef(new LatestFrameBuffer<PendingFrame>())
   const frameGateRef = useRef(new SingleFrameGate())
   const dispatchRetryTimerRef = useRef<number | undefined>(undefined)
@@ -131,8 +143,17 @@ export function Dashboard() {
     activeDeviceId,
     error: webcamError,
   } = useWebcam({ deviceId: selectedDeviceId || undefined, enabled: true })
+  const stageRef = useRef<HTMLElement>(null)
+  const [overlayBoxes, setOverlayBoxes] = useState<OverlayBox[]>([])
+  const [previewRect, setPreviewRect] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  })
   const { devices: cameraDevices, error: cameraDevicesError } =
     useCameraDevices(isWebcamActive)
+  const tutorial = useTutorial()
 
   const getAudioQueue = useCallback(() => {
     if (audioQueueRef.current) return audioQueueRef.current
@@ -239,6 +260,8 @@ export function Dashboard() {
       frameId,
       mode: pendingFrame.mode,
       sentAt,
+      width: pendingFrame.frame.width,
+      height: pendingFrame.frame.height,
     })
 
     const oldestRetainedFrameId = frameId - sentMetadataRetention
@@ -252,6 +275,49 @@ export function Dashboard() {
   useEffect(() => {
     attemptDispatchRef.current = attemptDispatch
   }, [attemptDispatch])
+
+  // `.camera-preview` è in object-fit: contain, quindi l'immagine occupa solo
+  // una parte del palco. I box vanno posati su quella parte, non sul palco.
+  const updatePreviewRect = useCallback(() => {
+    const stage = stageRef.current
+    const video = videoRef.current
+    if (!stage || !video) return
+
+    const { width, height } = stage.getBoundingClientRect()
+    setPreviewRect(
+      calculatePreviewContentRect({
+        containerWidth: width,
+        containerHeight: height,
+        imageWidth: video.videoWidth,
+        imageHeight: video.videoHeight,
+        objectFit: 'contain',
+      }),
+    )
+  }, [videoRef])
+
+  useEffect(() => {
+    const stage = stageRef.current
+    const video = videoRef.current
+    if (!stage || !video) return
+
+    updatePreviewRect()
+    video.addEventListener('loadedmetadata', updatePreviewRect)
+    video.addEventListener('resize', updatePreviewRect)
+    window.addEventListener('orientationchange', updatePreviewRect)
+
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(updatePreviewRect)
+    observer?.observe(stage)
+
+    return () => {
+      video.removeEventListener('loadedmetadata', updatePreviewRect)
+      video.removeEventListener('resize', updatePreviewRect)
+      window.removeEventListener('orientationchange', updatePreviewRect)
+      observer?.disconnect()
+    }
+  }, [updatePreviewRect, videoRef])
 
   const captureLatestFrame = useCallback(async () => {
     if (!captureActiveRef.current || captureInProgressRef.current) return
@@ -341,8 +407,12 @@ export function Dashboard() {
       if (!metadata) return
 
       if (message.type === 'detections') {
-        latestDetectionsRef.current =
-          metadata.mode === 'AUTO' ? message.detections : []
+        if (!showDiagnosticOverlays) return
+        setOverlayBoxes(
+          metadata.mode === 'AUTO'
+            ? toOverlayBoxes(message.detections, metadata.width, metadata.height)
+            : [],
+        )
         return
       }
 
@@ -392,7 +462,7 @@ export function Dashboard() {
     resetFrameFlow()
     stopAudioPlayback()
     clearPointingOverlay(true)
-    latestDetectionsRef.current = []
+    setOverlayBoxes([])
   }, [clearPointingOverlay, resetFrameFlow, stopAudioPlayback])
 
   useEffect(() => {
@@ -443,7 +513,7 @@ export function Dashboard() {
     setStreamConfig(null)
     setCaption('')
     setSessionError(null)
-    latestDetectionsRef.current = []
+    setOverlayBoxes([])
     clearPointingOverlay(true)
     stopAudioPlayback()
     resetFrameFlow()
@@ -461,7 +531,7 @@ export function Dashboard() {
     modeChangeCutoffFrameIdRef.current = 1
     sentFrameMetadataRef.current.clear()
     lastAudioFrameIdRef.current = null
-    latestDetectionsRef.current = []
+    setOverlayBoxes([])
     clearPointingOverlay(true)
     stopAudioPlayback()
     resetFrameFlow()
@@ -491,7 +561,7 @@ export function Dashboard() {
       modeChangeCutoffFrameIdRef.current = frameIdRef.current + 1
       lastAudioFrameIdRef.current = null
       latestFrameRef.current.clear()
-      latestDetectionsRef.current = []
+      setOverlayBoxes([])
       frameGateRef.current.allowNowWhenIdle()
       clearDispatchRetry()
       clearPointingOverlay(true)
@@ -579,12 +649,16 @@ export function Dashboard() {
         ? 'is-pending'
         : 'is-idle'
   const startDisabled = !isWebcamActive || Boolean(webcamError) || !webSocketUrl
-  const selectedCameraId = selectedDeviceId || activeDeviceId || ''
+  const selectedCameraId = resolveAvailableCameraId(
+    cameraDevices,
+    selectedDeviceId,
+    activeDeviceId,
+  )
 
   return (
     <div className="vision-app">
       <audio ref={audioRef} className="sr-only" preload="auto" />
-      <main className="camera-stage">
+      <main className="camera-stage" ref={stageRef}>
         <video
           ref={videoRef}
           className={`camera-preview${isMirrored ? ' is-mirrored' : ''}`}
@@ -593,6 +667,54 @@ export function Dashboard() {
           muted
           aria-label="Anteprima fotocamera"
         />
+
+        {showDiagnosticOverlays && captionMode === 'POINTING' && pointingOverlay && (
+          <div
+            className="hand-landmarks-stage"
+            aria-hidden="true"
+            style={{
+              left: `${previewRect.left}px`,
+              top: `${previewRect.top}px`,
+              width: `${previewRect.width}px`,
+              height: `${previewRect.height}px`,
+            }}
+          >
+            <HandLandmarksLayer
+              hands={pointingOverlay.hands}
+              width={previewRect.width}
+              height={previewRect.height}
+              mirrored={isMirrored}
+            />
+          </div>
+        )}
+
+        {showDiagnosticOverlays && overlayBoxes.length > 0 && (
+          <div
+            className="detections-layer"
+            aria-hidden="true"
+            style={{
+              left: `${previewRect.left}px`,
+              top: `${previewRect.top}px`,
+              width: `${previewRect.width}px`,
+              height: `${previewRect.height}px`,
+            }}
+          >
+            {overlayBoxes.map((box, index) => (
+              <div
+                className="bounding-box"
+                key={`${box.label}-${index}`}
+                style={{
+                  left: `${(isMirrored ? 1 - box.left - box.width : box.left) * 100}%`,
+                  top: `${box.top * 100}%`,
+                  width: `${box.width * 100}%`,
+                  height: `${box.height * 100}%`,
+                }}
+              >
+                <span className="detection-label">{box.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="camera-scrim camera-scrim-top" aria-hidden="true" />
         <div className="camera-scrim camera-scrim-bottom" aria-hidden="true" />
@@ -640,6 +762,21 @@ export function Dashboard() {
               <span className="sr-only" id="camera-device-error">
                 {cameraDevicesError}
               </span>
+            )}
+
+            {/* La guida parla: riaprirla durante l'analisi si sovrapporrebbe
+                alle descrizioni, quindi il pulsante c'è solo da fermi. */}
+            {!isCaptureRunning && !tutorial.isOpen && (
+              <button
+                className="guide-button"
+                type="button"
+                onClick={tutorial.open}
+                aria-label="Rivedi la guida"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 2h11a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Zm0 2a1 1 0 0 0-1 1v11.17A2.98 2.98 0 0 1 6 16h11V4H6Zm0 14a1 1 0 1 0 0 2h11v-2H6Z" />
+                </svg>
+              </button>
             )}
           </div>
 
@@ -691,6 +828,24 @@ export function Dashboard() {
           <p className="caption-text" aria-live="polite" aria-atomic="true">
             {caption}
           </p>
+        )}
+
+        {tutorial.isOpen && (
+          <TutorialOverlay
+            step={tutorial.step}
+            stepIndex={tutorial.stepIndex}
+            stepCount={tutorial.stepCount}
+            isVoiceEnabled={tutorial.isVoiceEnabled}
+            cameraDevices={cameraDevices}
+            selectedCameraId={selectedCameraId}
+            captionMode={captionMode}
+            onCameraChange={handleCameraDeviceChange}
+            onModeChange={handleCaptionModeChange}
+            onNext={tutorial.next}
+            onSkip={tutorial.close}
+            onRepeat={tutorial.repeat}
+            onToggleVoice={tutorial.toggleVoice}
+          />
         )}
 
         <footer className="camera-controls">

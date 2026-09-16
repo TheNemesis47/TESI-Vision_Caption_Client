@@ -147,6 +147,11 @@
   opacity: 0.68;
 }
 
+.camera-device-control select option {
+  color: #111820;
+  background: #fff;
+}
+
 .server-status-dot {
   width: 9px;
   height: 9px;
@@ -463,4 +468,75 @@
   .mode-control label {
     transition: none;
   }
+}
+
+/* Livello diagnostico dei box RF-DETR, attivo solo in modalità AUTO. È
+   posizionato sul riquadro effettivo dell'anteprima, non sul palco. */
+.detections-layer {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.bounding-box {
+  position: absolute;
+  min-width: 18px;
+  min-height: 18px;
+  border: 3px solid #00ff88;
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.75),
+    0 0 18px rgba(0, 255, 136, 0.4);
+}
+
+.detection-label {
+  position: absolute;
+  left: -2px;
+  top: -26px;
+  max-width: min(240px, 60vw);
+  overflow: hidden;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(9, 92, 51, 0.95);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Scheletro MediaPipe della mano, gemello diagnostico dei box: si accende con
+   lo stesso interruttore, ma soltanto in modalità puntamento. */
+.hand-landmarks-stage {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hand-landmarks-layer {
+  display: block;
+}
+
+.hand-bone {
+  stroke: #33ddff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.hand-bone.is-index {
+  stroke: #ffd400;
+  stroke-width: 4;
+  opacity: 1;
+}
+
+.hand-joint {
+  fill: #33ddff;
+  stroke: rgba(0, 0, 0, 0.65);
+  stroke-width: 1;
+}
+
+.hand-joint.is-index {
+  fill: #ffd400;
 }
