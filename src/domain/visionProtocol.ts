@@ -15,6 +15,10 @@ export type SentFrameMetadata = {
   frameId: number
   mode: CaptionMode
   sentAt: number
+  // Le detection tornano in pixel del frame inviato, non normalizzate: per
+  // disegnarle sopra l'anteprima serve sapere quanto era grande quel frame.
+  width?: number
+  height?: number
 }
 
 export type AudioFormat = 'wav' | 'mp3' | 'opus'
@@ -46,8 +50,18 @@ export type NormalizedPoint = {
   y: number
 }
 
+export type Handedness = 'LEFT' | 'RIGHT' | 'UNKNOWN'
+
+/** I 21 landmark MediaPipe di una mano, in frazioni del frame inviato. */
+export type HandLandmarks = {
+  handedness: Handedness
+  landmarks: NormalizedPoint[]
+}
+
+export const HAND_LANDMARK_COUNT = 21
+
 export type PointingOverlay = {
-  handedness: 'LEFT' | 'RIGHT' | 'UNKNOWN'
+  handedness: Handedness
   state: 'CANDIDATE' | 'ACTIVE'
   confirmation_progress: number
   ray: {
@@ -71,6 +85,9 @@ export type PointingOverlayMessage = {
   type: 'pointing_overlay'
   frame_id: number
   overlays: PointingOverlay[]
+  // I landmark accompagnano l'overlay a ogni frame POINTING, anche quando la
+  // mano non punta: servono alla vista diagnostica, non all'utente finale.
+  hands: HandLandmarks[]
   corridor: PointingCorridorStyle
 }
 
@@ -134,15 +151,39 @@ const parseNormalizedPoint = (value: unknown): NormalizedPoint | null => {
   return { x: value.x, y: value.y }
 }
 
+const isHandedness = (value: unknown): value is Handedness => {
+  return value === 'LEFT' || value === 'RIGHT' || value === 'UNKNOWN'
+}
+
+/**
+ * I landmark escono dal fotogramma quando la mano tocca il bordo, quindi non
+ * sono vincolati a [0, 1] come i punti del corridoio. Una mano malformata si
+ * scarta da sola: è materiale diagnostico, non deve far cadere l'overlay del
+ * puntamento.
+ */
+const parseHandLandmarks = (value: unknown): HandLandmarks | null => {
+  if (!isRecord(value) || !isHandedness(value.handedness)) return null
+  if (!Array.isArray(value.landmarks)) return null
+  if (value.landmarks.length !== HAND_LANDMARK_COUNT) return null
+
+  const landmarks: NormalizedPoint[] = []
+  for (const rawLandmark of value.landmarks) {
+    if (
+      !isRecord(rawLandmark) ||
+      !isFiniteNumber(rawLandmark.x) ||
+      !isFiniteNumber(rawLandmark.y)
+    ) {
+      return null
+    }
+    landmarks.push({ x: rawLandmark.x, y: rawLandmark.y })
+  }
+
+  return { handedness: value.handedness, landmarks }
+}
+
 const parsePointingOverlay = (value: unknown): PointingOverlay | null => {
   if (!isRecord(value) || !isRecord(value.ray)) return null
-  if (
-    value.handedness !== 'LEFT' &&
-    value.handedness !== 'RIGHT' &&
-    value.handedness !== 'UNKNOWN'
-  ) {
-    return null
-  }
+  if (!isHandedness(value.handedness)) return null
   if (value.state !== 'CANDIDATE' && value.state !== 'ACTIVE') return null
   if (!isRatio(value.confirmation_progress)) return null
 
@@ -428,12 +469,19 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
       }
     }
 
+    const hands = Array.isArray(parsed.hands)
+      ? parsed.hands
+          .map(parseHandLandmarks)
+          .filter((hand): hand is HandLandmarks => hand !== null)
+      : []
+
     return {
       kind: 'message',
       message: {
         type: 'pointing_overlay',
         frame_id: frameId,
         overlays: overlays as PointingOverlay[],
+        hands,
         corridor,
       },
     }

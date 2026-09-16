@@ -13,6 +13,7 @@ const createMessage = (
   type: 'pointing_overlay',
   frame_id: frameId,
   overlays,
+  hands: [],
   corridor: {
     coordinate_space: 'normalized',
     width_reference: 'short_side',

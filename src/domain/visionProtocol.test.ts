@@ -274,6 +274,68 @@ describe('parseVisionServerMessage', () => {
     ).toMatchObject({ kind: 'invalid' })
   })
 
+  it('porta i landmark della mano accanto agli overlay', () => {
+    const corridor = {
+      coordinate_space: 'normalized',
+      width_reference: 'short_side',
+      start_half_width_ratio: 0.008,
+      min_end_half_width_ratio: 0.03,
+      expansion_ratio: 0.04,
+      fill_alpha: 0.14,
+      color: '#FFFF00',
+      line_width_px: 2,
+    }
+    const landmarks = Array.from({ length: 21 }, (_, index) => ({
+      // Fuori dal fotogramma: la mano al bordo non va scartata.
+      x: index === 0 ? -0.02 : index / 100,
+      y: 0.5,
+    }))
+
+    const result = parseVisionServerMessage({
+      type: 'pointing_overlay',
+      frame_id: 126,
+      overlays: [],
+      hands: [
+        { handedness: 'LEFT', landmarks },
+        { handedness: 'RIGHT', landmarks: landmarks.slice(0, 20) },
+        { handedness: 'CENTRO', landmarks },
+      ],
+      corridor,
+    })
+
+    expect(result.kind).toBe('message')
+    if (result.kind !== 'message') return
+    if (result.message.type !== 'pointing_overlay') return
+
+    // Le due mani malformate spariscono senza invalidare il messaggio.
+    expect(result.message.hands).toHaveLength(1)
+    expect(result.message.hands[0].handedness).toBe('LEFT')
+    expect(result.message.hands[0].landmarks[0]).toEqual({ x: -0.02, y: 0.5 })
+  })
+
+  it('accetta un pointing_overlay senza il campo hands', () => {
+    const result = parseVisionServerMessage({
+      type: 'pointing_overlay',
+      frame_id: 127,
+      overlays: [],
+      corridor: {
+        coordinate_space: 'normalized',
+        width_reference: 'short_side',
+        start_half_width_ratio: 0.008,
+        min_end_half_width_ratio: 0.03,
+        expansion_ratio: 0.04,
+        fill_alpha: 0.14,
+        color: '#FFFF00',
+        line_width_px: 2,
+      },
+    })
+
+    expect(result).toMatchObject({
+      kind: 'message',
+      message: { type: 'pointing_overlay', hands: [] },
+    })
+  })
+
   it('gestisce tipo sconosciuto senza eccezioni', () => {
     expect(
       parseVisionServerMessage({ type: 'diagnostic', frame_id: 1 }),

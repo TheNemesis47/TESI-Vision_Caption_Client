@@ -33,7 +33,12 @@ export function usePointingOverlay(timeoutMs = POINTING_OVERLAY_TTL_MS) {
       window.clearTimeout(expiryTimerRef.current)
       expiryTimerRef.current = undefined
 
-      if (nextMessage.overlays.length === 0) {
+      // Senza corridoio ma con una mano in vista il messaggio resta: è il caso
+      // che la vista diagnostica deve mostrare, la gesture che non scatta.
+      if (
+        nextMessage.overlays.length === 0 &&
+        nextMessage.hands.length === 0
+      ) {
         setMessage(null)
         return true
       }

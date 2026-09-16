@@ -1,14 +1,27 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PointingOverlayMessage } from '../domain/visionProtocol'
+import {
+  HAND_LANDMARK_COUNT,
+  type HandLandmarks,
+  type PointingOverlayMessage,
+} from '../domain/visionProtocol'
 import {
   POINTING_OVERLAY_TTL_MS,
   usePointingOverlay,
 } from './usePointingOverlay'
 
+const createHand = (): HandLandmarks => ({
+  handedness: 'RIGHT',
+  landmarks: Array.from({ length: HAND_LANDMARK_COUNT }, (_, index) => ({
+    x: index / 100,
+    y: 0.5,
+  })),
+})
+
 const createMessage = (
   frameId: number,
   hasOverlay = true,
+  hands: HandLandmarks[] = [],
 ): PointingOverlayMessage => ({
   type: 'pointing_overlay',
   frame_id: frameId,
@@ -25,6 +38,7 @@ const createMessage = (
         },
       ]
     : [],
+  hands,
   corridor: {
     coordinate_space: 'normalized',
     width_reference: 'short_side',
@@ -95,5 +109,35 @@ describe('usePointingOverlay', () => {
       expect(result.current.apply(createMessage(1))).toBe(true)
     })
     expect(result.current.message?.frame_id).toBe(1)
+  })
+})
+
+describe('usePointingOverlay con i landmark diagnostici', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('tiene il messaggio quando la mano c’è ma non sta puntando', () => {
+    const { result } = renderHook(() => usePointingOverlay())
+
+    act(() => {
+      result.current.apply(createMessage(4, false, [createHand()]))
+    })
+
+    expect(result.current.message?.hands).toHaveLength(1)
+    expect(result.current.message?.overlays).toHaveLength(0)
+  })
+
+  it('senza corridoio né mani torna a mostrare nulla', () => {
+    const { result } = renderHook(() => usePointingOverlay())
+
+    act(() => {
+      result.current.apply(createMessage(4, true, [createHand()]))
+    })
+    act(() => {
+      result.current.apply(createMessage(5, false, []))
+    })
+
+    expect(result.current.message).toBeNull()
   })
 })
