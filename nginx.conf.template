@@ -1,0 +1,58 @@
+# Il client e il WebSocket devono stare sullo stesso origin: la fotocamera si
+# apre solo in contesto sicuro, e un secondo origin significherebbe un secondo
+# certificato. Le richieste statiche restano qui, /ws/vision va al server.
+#
+# L'immagine nginx espande ${VISION_SERVER} all'avvio (envsubst sui template):
+# le variabili di nginx, $uri e le altre, non vengono toccate perché non sono
+# variabili d'ambiente.
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Il DNS interno di Docker, interrogato a ogni richiesta invece che al solo
+    # avvio: così nginx parte anche se il server non c'è ancora, e lo ritrova
+    # se riparte con un altro indirizzo.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # Le rotte del client sono lato browser: quello che non è un file torna index.html.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Gli asset hanno l'impronta nel nome, l'index no: solo i primi si possono
+    # tenere in cache a lungo.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    location /ws/vision {
+        set $vision_upstream "${VISION_SERVER}";
+        proxy_pass http://$vision_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Un fotogramma ogni mezzo secondo e una descrizione che può tardare:
+        # il canale resta aperto anche quando tace.
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        proxy_buffering off;
+    }
+
+    location = /health {
+        set $health_upstream "${VISION_SERVER}";
+        proxy_pass http://$health_upstream/health;
+        proxy_set_header Host $host;
+    }
+}
