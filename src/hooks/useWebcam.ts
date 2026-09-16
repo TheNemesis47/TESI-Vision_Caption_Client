@@ -5,6 +5,16 @@ type UseWebcamOptions = {
     enabled?: boolean;
 };
 
+const REAR_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
+    facingMode: {exact: 'environment'},
+};
+
+const REAR_CAMERA_FALLBACK_ERRORS = new Set([
+    'ConstraintNotSatisfiedError',
+    'NotFoundError',
+    'OverconstrainedError',
+]);
+
 export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isActive, setIsActive] = useState<boolean>(false);
@@ -52,10 +62,25 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
 
         const start = async () => {
             try {
-                const videoConstraints: boolean | MediaTrackConstraints = deviceId
-                    ? {deviceId: {exact: deviceId}}
-                    : true;
-                stream = await navigator.mediaDevices.getUserMedia({video: videoConstraints});
+                if (deviceId) {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {deviceId: {exact: deviceId}},
+                    });
+                } else {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: REAR_CAMERA_CONSTRAINTS,
+                        });
+                    } catch (rearCameraError) {
+                        const errorName = rearCameraError instanceof Error
+                            ? rearCameraError.name
+                            : '';
+                        if (!REAR_CAMERA_FALLBACK_ERRORS.has(errorName)) {
+                            throw rearCameraError;
+                        }
+                        stream = await navigator.mediaDevices.getUserMedia({video: true});
+                    }
+                }
 
                 if (cancelled) {
                     stream.getTracks().forEach((track) => track.stop());

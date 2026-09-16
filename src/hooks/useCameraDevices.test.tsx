@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useCameraDevices } from './useCameraDevices'
+import { resolveAvailableCameraId, useCameraDevices } from './useCameraDevices'
 
 describe('useCameraDevices', () => {
   const enumerateDevices = vi.fn()
@@ -37,6 +37,17 @@ describe('useCameraDevices', () => {
       { deviceId: 'back', label: 'Camera posteriore' },
       { deviceId: 'front', label: 'Fotocamera 2' },
     ])
+  })
+
+  it('mantiene sempre il selettore associato a una fotocamera disponibile', () => {
+    const devices = [
+      { deviceId: 'back', label: 'Camera posteriore' },
+      { deviceId: 'front', label: 'Camera anteriore' },
+    ]
+
+    expect(resolveAvailableCameraId(devices, '', undefined)).toBe('back')
+    expect(resolveAvailableCameraId(devices, 'missing', 'front')).toBe('front')
+    expect(resolveAvailableCameraId([], 'missing')).toBe('')
   })
 
   it('aggiorna l’elenco su devicechange', async () => {

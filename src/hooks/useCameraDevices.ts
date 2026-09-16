@@ -5,6 +5,16 @@ export type CameraDevice = {
   label: string
 }
 
+export function resolveAvailableCameraId(
+  devices: CameraDevice[],
+  ...preferredIds: Array<string | undefined>
+) {
+  const availableIds = new Set(devices.map((device) => device.deviceId))
+  return preferredIds.find((deviceId) => deviceId && availableIds.has(deviceId))
+    ?? devices[0]?.deviceId
+    ?? ''
+}
+
 export function useCameraDevices(enabled: boolean) {
   const [devices, setDevices] = useState<CameraDevice[]>([])
   const [error, setError] = useState<string | null>(null)

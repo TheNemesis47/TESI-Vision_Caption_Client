@@ -7,6 +7,11 @@ function WebcamHarness({ enabled }: { enabled: boolean }) {
   return <video ref={videoRef} data-mirrored={isMirrored} />
 }
 
+function DefaultCameraHarness() {
+  const { videoRef } = useWebcam()
+  return <video ref={videoRef} />
+}
+
 describe('useWebcam lifecycle', () => {
   const stopTrack = vi.fn()
   const stream = {
@@ -39,6 +44,29 @@ describe('useWebcam lifecycle', () => {
   it('non apre la camera prima dell’avvio della sessione', () => {
     render(<WebcamHarness enabled={false} />)
     expect(getUserMedia).not.toHaveBeenCalled()
+  })
+
+  it('preferisce la fotocamera posteriore quando non è stato scelto un dispositivo', async () => {
+    render(<DefaultCameraHarness />)
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce())
+    expect(getUserMedia).toHaveBeenCalledWith({
+      video: { facingMode: { exact: 'environment' } },
+    })
+  })
+
+  it('usa la fotocamera disponibile se quella posteriore non è supportata', async () => {
+    const constraintError = new Error('Fotocamera posteriore non disponibile')
+    constraintError.name = 'OverconstrainedError'
+    getUserMedia.mockRejectedValueOnce(constraintError)
+
+    render(<DefaultCameraHarness />)
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2))
+    expect(getUserMedia).toHaveBeenNthCalledWith(1, {
+      video: { facingMode: { exact: 'environment' } },
+    })
+    expect(getUserMedia).toHaveBeenNthCalledWith(2, { video: true })
   })
 
   it('ferma tutte le media track allo stop', async () => {
