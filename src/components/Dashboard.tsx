@@ -396,6 +396,13 @@ export function Dashboard() {
         return
       }
 
+      if (message.type === 'stop_audio') {
+        // Vale qualunque sia il frame: chi alza la mano vuole silenzio subito.
+        stopAudioPlayback()
+        navigator.vibrate?.(60)
+        return
+      }
+
       if (message.type === 'frame_done') {
         if (frameGateRef.current.complete(message, Date.now())) {
           attemptDispatchRef.current()
@@ -449,7 +456,13 @@ export function Dashboard() {
         setSessionError('Descrizione audio non valida')
       }
     },
-    [applyPointingOverlay, clearPointingOverlay, getAudioQueue, getCurrentFrameMetadata],
+    [
+      applyPointingOverlay,
+      clearPointingOverlay,
+      getAudioQueue,
+      getCurrentFrameMetadata,
+      stopAudioPlayback,
+    ],
   )
 
   useEffect(() => {

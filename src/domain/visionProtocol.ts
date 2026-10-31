@@ -105,12 +105,19 @@ export type FrameDoneServerMessage = {
   next_frame_after_ms: number
 }
 
+/** Il server ha visto il gesto di stop (mano aperta): la voce va zittita. */
+export type StopAudioServerMessage = {
+  type: 'stop_audio'
+  frame_id: number
+}
+
 export type VisionServerMessage =
   | AudioServerMessage
   | DetectionsServerMessage
   | PointingOverlayMessage
   | StreamConfigServerMessage
   | FrameDoneServerMessage
+  | StopAudioServerMessage
 
 export type VisionMessageParseResult =
   | { kind: 'message'; message: VisionServerMessage }
@@ -354,6 +361,14 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
         max_in_flight: parsed.max_in_flight,
       },
     }
+  }
+
+  if (parsed.type === 'stop_audio') {
+    const frameId = parseFrameId(parsed.frame_id)
+    if (frameId === null) {
+      return { kind: 'invalid', reason: 'stop_audio con frame_id non valido' }
+    }
+    return { kind: 'message', message: { type: 'stop_audio', frame_id: frameId } }
   }
 
   if (parsed.type === 'frame_done') {

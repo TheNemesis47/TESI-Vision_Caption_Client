@@ -407,3 +407,16 @@ describe('policy output della sessione', () => {
     expect(getAudioFreshnessLimit('POINTING', 2500, 12000)).toBe(12000)
   })
 })
+
+describe('stop_audio', () => {
+  it('riconosce il gesto di stop inviato dal server', () => {
+    expect(parseVisionServerMessage(JSON.stringify({ type: 'stop_audio', frame_id: 42 }))).toEqual({
+      kind: 'message',
+      message: { type: 'stop_audio', frame_id: 42 },
+    })
+  })
+
+  it('rifiuta uno stop_audio senza frame_id valido', () => {
+    expect(parseVisionServerMessage(JSON.stringify({ type: 'stop_audio' })).kind).toBe('invalid')
+  })
+})
