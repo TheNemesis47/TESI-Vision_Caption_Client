@@ -111,6 +111,14 @@ export type StopAudioServerMessage = {
   frame_id: number
 }
 
+/** Il server ha visto il gesto a V: il telefono deve cambiare modalità. */
+export type ModeSwitchServerMessage = {
+  type: 'mode_switch'
+  frame_id: number
+  mode: CaptionMode
+  min_frame_interval_ms: number | null
+}
+
 export type VisionServerMessage =
   | AudioServerMessage
   | DetectionsServerMessage
@@ -118,6 +126,7 @@ export type VisionServerMessage =
   | StreamConfigServerMessage
   | FrameDoneServerMessage
   | StopAudioServerMessage
+  | ModeSwitchServerMessage
 
 export type VisionMessageParseResult =
   | { kind: 'message'; message: VisionServerMessage }
@@ -369,6 +378,27 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
       return { kind: 'invalid', reason: 'stop_audio con frame_id non valido' }
     }
     return { kind: 'message', message: { type: 'stop_audio', frame_id: frameId } }
+  }
+
+  if (parsed.type === 'mode_switch') {
+    const frameId = parseFrameId(parsed.frame_id)
+    if (frameId === null) {
+      return { kind: 'invalid', reason: 'mode_switch con frame_id non valido' }
+    }
+    if (parsed.mode !== 'AUTO' && parsed.mode !== 'POINTING') {
+      return { kind: 'invalid', reason: 'mode_switch con modalità sconosciuta' }
+    }
+    const interval = Number(parsed.min_frame_interval_ms)
+    return {
+      kind: 'message',
+      message: {
+        type: 'mode_switch',
+        frame_id: frameId,
+        mode: parsed.mode,
+        min_frame_interval_ms:
+          Number.isFinite(interval) && interval > 0 ? interval : null,
+      },
+    }
   }
 
   if (parsed.type === 'frame_done') {

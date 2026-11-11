@@ -420,3 +420,45 @@ describe('stop_audio', () => {
     expect(parseVisionServerMessage(JSON.stringify({ type: 'stop_audio' })).kind).toBe('invalid')
   })
 })
+
+describe('messaggio di cambio modalità', () => {
+  it('riconosce la richiesta del server dopo il gesto', () => {
+    const result = parseVisionServerMessage(
+      JSON.stringify({
+        type: 'mode_switch',
+        frame_id: 7,
+        mode: 'POINTING',
+        min_frame_interval_ms: 100,
+      }),
+    )
+
+    expect(result).toEqual({
+      kind: 'message',
+      message: {
+        type: 'mode_switch',
+        frame_id: 7,
+        mode: 'POINTING',
+        min_frame_interval_ms: 100,
+      },
+    })
+  })
+
+  it('rifiuta una modalità che non esiste', () => {
+    const result = parseVisionServerMessage(
+      JSON.stringify({ type: 'mode_switch', frame_id: 7, mode: 'MUSEO' }),
+    )
+
+    expect(result.kind).toBe('invalid')
+  })
+
+  it('accetta il messaggio anche senza il ritmo dei frame', () => {
+    const result = parseVisionServerMessage(
+      JSON.stringify({ type: 'mode_switch', frame_id: 7, mode: 'AUTO' }),
+    )
+
+    expect(result).toMatchObject({
+      kind: 'message',
+      message: { mode: 'AUTO', min_frame_interval_ms: null },
+    })
+  })
+})

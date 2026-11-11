@@ -4,6 +4,7 @@ import {
   captureVideoFrame,
   type CapturedFrame,
 } from '../hooks/useFrameCapture'
+import { announceMode } from '../services/modeAnnouncement'
 import { usePointingOverlay } from '../hooks/usePointingOverlay'
 import { useServerConnection } from '../hooks/useServerConnection'
 import { useWebcam } from '../hooks/useWebcam'
@@ -114,6 +115,9 @@ export function Dashboard() {
   const frameGateRef = useRef(new SingleFrameGate())
   const dispatchRetryTimerRef = useRef<number | undefined>(undefined)
   const attemptDispatchRef = useRef<() => void>(() => undefined)
+  // Il gesto a V arriva dal server mentre handleCaptionModeChange è ancora
+  // più in basso in questo file: la ref evita il riferimento in avanti.
+  const applyModeChangeRef = useRef<(mode: CaptionMode) => void>(() => undefined)
   const serverMessageRef = useRef<(message: VisionServerMessage) => void>(
     () => undefined,
   )
@@ -403,6 +407,18 @@ export function Dashboard() {
         return
       }
 
+      if (message.type === 'mode_switch') {
+        // Il gesto a V: chi non vede non cerca un pulsante sullo schermo.
+        // La conferma è una vibrazione e una voce, perché il cambio non si
+        // vede e senza riscontro non si sa se il gesto è stato capito.
+        if (message.mode !== captionModeRef.current) {
+          applyModeChangeRef.current(message.mode)
+          navigator.vibrate?.([40, 60, 40])
+          announceMode(message.mode)
+        }
+        return
+      }
+
       if (message.type === 'frame_done') {
         if (frameGateRef.current.complete(message, Date.now())) {
           attemptDispatchRef.current()
@@ -588,6 +604,10 @@ export function Dashboard() {
     },
     [captureLatestFrame, clearDispatchRetry, clearPointingOverlay, stopAudioPlayback],
   )
+
+  useEffect(() => {
+    applyModeChangeRef.current = handleCaptionModeChange
+  }, [handleCaptionModeChange])
 
   const handleCameraDeviceChange = useCallback(
     (deviceId: string) => {
