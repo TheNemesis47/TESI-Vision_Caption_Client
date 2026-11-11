@@ -6,7 +6,7 @@
  * escono dallo stesso indirizzo.
  */
 
-export const TUTORIAL_VERSION = 'v1'
+export const TUTORIAL_VERSION = 'v2'
 const SEEN_KEY = 'visioncaption.tutorial'
 const VOICE_KEY = 'visioncaption.tutorial.voice'
 
@@ -58,7 +58,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       'Secondo passo: le due modalità. Automatica descrive l’ambiente da sola, mentre ' +
       'cammini. Puntamento descrive soltanto l’oggetto che indichi con il dito, ed è ' +
       'quella che serve per farsi leggere un’etichetta, un cartello o un menu. ' +
-      'Scegli quella che preferisci: potrai cambiarla quando vuoi.',
+      'Scegli quella che preferisci, potrai cambiarla quando vuoi, poi premi Avanti.',
     audio: '/tutorial/modalita.mp3',
     control: 'mode',
     next: 'Avanti',
@@ -67,11 +67,15 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'avvio',
     title: 'Sei pronto',
     body:
-      'Premi Avvia per cominciare e premi di nuovo per fermare. Puoi rivedere questa ' +
-      'guida quando vuoi, dal pulsante con il libro in alto.',
+      'Premi Ho capito per chiudere la guida. Nella schermata trovi il pulsante ' +
+      'Avvia: premilo per far partire le descrizioni e premilo di nuovo, quando ' +
+      'diventa Arresta, per fermarle. Per riascoltare questa guida c’è il pulsante ' +
+      'Rivedi la guida, in alto.',
     voice:
-      'Sei pronto. Premi Avvia per cominciare, e premi di nuovo per fermare. Puoi ' +
-      'rivedere questa guida quando vuoi, dal pulsante con il libro in alto.',
+      'Sei pronto. Premi Ho capito per chiudere la guida. Nella schermata trovi il ' +
+      'pulsante Avvia: premilo per far partire le descrizioni, e premilo di nuovo, ' +
+      'quando diventa Arresta, per fermarle. Per riascoltare questa guida c’è il ' +
+      'pulsante Rivedi la guida, in alto.',
     audio: '/tutorial/avvio.mp3',
     next: 'Ho capito',
   },
