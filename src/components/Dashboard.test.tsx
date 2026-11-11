@@ -7,14 +7,25 @@ import { rememberTutorialSeen } from '../domain/tutorial'
 
 const videoRef = createRef<HTMLVideoElement>()
 
+const webcam = {
+  zoomRange: null as { min: number; max: number; step: number } | null,
+  applyZoom: vi.fn(async (value: number) => value),
+  facing: '' as string,
+}
+
 vi.mock('../hooks/useWebcam', () => ({
-  useWebcam: () => ({
-    videoRef,
-    isActive: true,
-    isMirrored: false,
-    activeDeviceId: 'camera-back',
-    error: null,
-  }),
+  useWebcam: (options: { facing?: string } = {}) => {
+    webcam.facing = options.facing ?? ''
+    return {
+      videoRef,
+      isActive: true,
+      isMirrored: false,
+      activeDeviceId: 'camera-back',
+      error: null,
+      zoomRange: webcam.zoomRange,
+      applyZoom: webcam.applyZoom,
+    }
+  },
 }))
 
 vi.mock('../hooks/useCameraDevices', async (importOriginal) => {
@@ -45,6 +56,8 @@ vi.mock('../hooks/useServerConnection', () => ({
 describe('Dashboard end-user', () => {
   beforeEach(() => {
     videoRef.current = null
+    webcam.zoomRange = null
+    webcam.applyZoom.mockClear()
     window.localStorage.clear()
     // La vista ordinaria è quella di chi la guida l'ha già vista.
     rememberTutorialSeen()
@@ -58,7 +71,7 @@ describe('Dashboard end-user', () => {
     expect(screen.getByRole('radio', { name: 'Punta' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Avvia' })).toBeInTheDocument()
     expect(screen.getByText('Server')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Fotocamera' })).toHaveValue(
+    expect(screen.getByRole('combobox', { name: 'Altri obiettivi della fotocamera' })).toHaveValue(
       'camera-back',
     )
 
@@ -73,7 +86,7 @@ describe('Dashboard end-user', () => {
   it('permette di scegliere la fotocamera prima dell’analisi', async () => {
     const user = userEvent.setup()
     render(<Dashboard />)
-    const cameraSelect = screen.getByRole('combobox', { name: 'Fotocamera' })
+    const cameraSelect = screen.getByRole('combobox', { name: 'Altri obiettivi della fotocamera' })
 
     await user.selectOptions(cameraSelect, 'camera-front')
 
@@ -107,5 +120,58 @@ describe('Dashboard e la guida', () => {
 
     await user.click(screen.getByRole('button', { name: 'Rivedi la guida' }))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+
+describe('comandi della fotocamera', () => {
+  beforeEach(() => {
+    videoRef.current = null
+    window.localStorage.clear()
+    rememberTutorialSeen()
+    webcam.zoomRange = null
+    webcam.applyZoom.mockClear()
+  })
+
+  it('parte dalla posteriore e il pulsante dice dove si va', async () => {
+    render(<Dashboard />)
+
+    const toggle = screen.getByRole('button', {
+      name: 'Passa alla fotocamera frontale',
+    })
+    expect(toggle).toHaveTextContent('Fotocamera posteriore')
+    expect(webcam.facing).toBe('environment')
+
+    await userEvent.click(toggle)
+
+    expect(webcam.facing).toBe('user')
+    expect(
+      screen.getByRole('button', { name: 'Passa alla fotocamera posteriore' }),
+    ).toHaveTextContent('Fotocamera frontale')
+  })
+
+  it('lo zoom non si mostra se l obiettivo non lo dichiara', () => {
+    render(<Dashboard />)
+
+    expect(screen.queryByRole('group', { name: 'Zoom' })).not.toBeInTheDocument()
+  })
+
+  it('con lo zoom disponibile i pulsanti lo spostano davvero', async () => {
+    webcam.zoomRange = { min: 1, max: 3, step: 0.5 }
+    render(<Dashboard />)
+
+    expect(screen.getByRole('group', { name: 'Zoom' })).toBeInTheDocument()
+    const slider = screen.getByRole('slider', { name: 'Zoom' })
+    expect(slider).toHaveAttribute('aria-valuetext', 'Zoom 1×')
+    // Al minimo della corsa non si può ridurre oltre.
+    expect(screen.getByRole('button', { name: 'Riduci lo zoom' })).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Aumenta lo zoom' }))
+
+    expect(webcam.applyZoom).toHaveBeenCalledWith(1.5)
+    expect(screen.getByRole('slider', { name: 'Zoom' })).toHaveAttribute(
+      'aria-valuetext',
+      'Zoom 1,5×',
+    )
   })
 })

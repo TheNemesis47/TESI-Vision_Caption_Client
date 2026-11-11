@@ -1,0 +1,52 @@
+.camera-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.camera-facing {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  /* Bersaglio grande: si preme con il telefono in mano, spesso al buio. */
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.camera-facing svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  flex: none;
+}
+
+.camera-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.camera-zoom button {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.camera-zoom input[type='range'] {
+  flex: 1;
+  min-width: 90px;
+  height: 48px;
+}
+
+.camera-zoom-value {
+  min-width: 56px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}

@@ -1,13 +1,22 @@
-import {useRef, useState, useEffect} from "react";
+import {useCallback, useRef, useState, useEffect} from "react";
+
+import {
+    DEFAULT_FACING,
+    clampZoom,
+    readZoomRange,
+    type CameraFacing,
+    type ZoomRange,
+} from "../domain/cameraControls";
 
 type UseWebcamOptions = {
     deviceId?: string;
     enabled?: boolean;
+    facing?: CameraFacing;
 };
 
-const REAR_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
-    facingMode: {exact: 'environment'},
-};
+const facingConstraints = (facing: CameraFacing): MediaTrackConstraints => ({
+    facingMode: {exact: facing},
+});
 
 const REAR_CAMERA_FALLBACK_ERRORS = new Set([
     'ConstraintNotSatisfiedError',
@@ -15,12 +24,37 @@ const REAR_CAMERA_FALLBACK_ERRORS = new Set([
     'OverconstrainedError',
 ]);
 
-export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
+export function useWebcam({
+    deviceId,
+    enabled = true,
+    facing = DEFAULT_FACING,
+}: UseWebcamOptions = {}) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isActive, setIsActive] = useState<boolean>(false);
     const [isMirrored, setIsMirrored] = useState<boolean>(false);
     const [activeDeviceId, setActiveDeviceId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
+    // Lo zoom vive sul track: cambiando fotocamera cambia la corsa, e a
+    // volte sparisce del tutto.
+    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+    const [zoomRange, setZoomRange] = useState<ZoomRange | null>(null);
+
+    const applyZoom = useCallback(async (value: number): Promise<number | null> => {
+        const track = videoTrackRef.current;
+        const range = readZoomRange(track);
+        if (!track?.applyConstraints || !range) return null;
+        const wanted = clampZoom(value, range);
+        try {
+            // Lo zoom non è ancora nei tipi standard di MediaTrackConstraints.
+            await track.applyConstraints({
+                advanced: [{zoom: wanted}],
+            } as unknown as MediaTrackConstraints);
+            return wanted;
+        } catch {
+            // Un obiettivo che rifiuta lo zoom non deve fermare l'anteprima.
+            return null;
+        }
+    }, []);
 
     useEffect(() => {
         //setup
@@ -40,6 +74,7 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
             setIsActive(false);
             setIsMirrored(false);
             setActiveDeviceId('');
+            setZoomRange(null);
             setError(null);
         });
 
@@ -69,7 +104,7 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
                 } else {
                     try {
                         stream = await navigator.mediaDevices.getUserMedia({
-                            video: REAR_CAMERA_CONSTRAINTS,
+                            video: facingConstraints(facing),
                         });
                     } catch (rearCameraError) {
                         const errorName = rearCameraError instanceof Error
@@ -88,6 +123,8 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
                 }
 
                 activeVideoTrack = stream.getVideoTracks()[0] ?? null;
+                videoTrackRef.current = activeVideoTrack;
+                setZoomRange(readZoomRange(activeVideoTrack));
                 const facingMode = activeVideoTrack?.getSettings?.().facingMode;
                 const nextActiveDeviceId = activeVideoTrack?.getSettings?.().deviceId;
                 setIsMirrored(facingMode === 'user');
@@ -112,6 +149,7 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
                 if (cancelled) return;
                 setIsMirrored(false);
                 setActiveDeviceId('');
+                setZoomRange(null);
                 setError("WebcamError - non disponibile: " + (e as Error).message);
             }
         };
@@ -126,10 +164,12 @@ export function useWebcam({deviceId, enabled = true}: UseWebcamOptions = {}) {
             }
             activeVideoTrack?.removeEventListener?.('ended', handleTrackEnded);
             stream?.getTracks().forEach((track) => track.stop());
+            videoTrackRef.current = null;
             setIsActive(false);
             setIsMirrored(false);
             setActiveDeviceId('');
+            setZoomRange(null);
         }
-    }, [deviceId, enabled])
-    return { videoRef, isActive, isMirrored, activeDeviceId, error };
+    }, [deviceId, enabled, facing])
+    return { videoRef, isActive, isMirrored, activeDeviceId, error, zoomRange, applyZoom };
 }
