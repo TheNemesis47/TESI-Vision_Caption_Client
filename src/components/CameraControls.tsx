@@ -33,7 +33,7 @@ export default function CameraControls({
   disabled = false,
 }: CameraControlsProps) {
   return (
-    <div className="camera-controls">
+    <div className="camera-setup">
       <button
         type="button"
         className="camera-facing"

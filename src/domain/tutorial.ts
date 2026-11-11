@@ -6,7 +6,9 @@
  * escono dallo stesso indirizzo.
  */
 
-export const TUTORIAL_VERSION = 'v2'
+import type { CaptionMode } from './visionProtocol'
+
+export const TUTORIAL_VERSION = 'v3'
 const SEEN_KEY = 'visioncaption.tutorial'
 const VOICE_KEY = 'visioncaption.tutorial.voice'
 
@@ -20,6 +22,12 @@ export type TutorialStep = {
   /** Traccia pre-generata con la stessa voce dell'applicazione. */
   audio?: string
   control?: 'camera' | 'mode'
+  /**
+   * Passo di prova: la fotocamera si accende in questa modalità e la guida
+   * si fa da parte, perché chi arriva in fondo abbia già sentito una
+   * descrizione invece di avere solo sentito spiegare come si fa.
+   */
+  practice?: CaptionMode
   /** Etichetta del pulsante che porta al passo seguente. */
   next: string
 }
@@ -64,15 +72,48 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     next: 'Avanti',
   },
   {
+    id: 'prova-automatica',
+    title: 'Terzo passo: prova la modalità automatica',
+    body:
+      'La fotocamera è accesa. Punta il telefono verso quello che hai davanti ' +
+      'e tienilo fermo: in un paio di secondi senti la descrizione. Quando ' +
+      'l’hai sentita premi Avanti.',
+    voice:
+      'Terzo passo: prova la modalità automatica. La fotocamera è accesa. ' +
+      'Punta il telefono verso quello che hai davanti e tienilo fermo: in un ' +
+      'paio di secondi senti la descrizione. Quando l’hai sentita premi Avanti.',
+    audio: '/tutorial/prova-automatica.mp3',
+    practice: 'AUTO',
+    next: 'Avanti',
+  },
+  {
+    id: 'prova-puntamento',
+    title: 'Quarto passo: prova a indicare col dito',
+    body:
+      'Tieni il telefono con una mano e con l’altra indica un oggetto davanti ' +
+      'a te, con l’indice teso e fermo per un attimo. Il sistema descrive ' +
+      'quello che indichi. Quando l’hai sentito premi Avanti.',
+    voice:
+      'Quarto passo: prova a indicare col dito. Tieni il telefono con una mano ' +
+      'e con l’altra indica un oggetto davanti a te, con l’indice teso e fermo ' +
+      'per un attimo. Il sistema descrive quello che indichi. Quando l’hai ' +
+      'sentito premi Avanti.',
+    audio: '/tutorial/prova-puntamento.mp3',
+    practice: 'POINTING',
+    next: 'Avanti',
+  },
+  {
     id: 'avvio',
     title: 'Sei pronto',
     body:
-      'Premi Ho capito per chiudere la guida. Nella schermata trovi il pulsante ' +
+      'Hai provato tutte e due le modalità. Premi Ho capito per chiudere la ' +
+      'guida. Nella schermata trovi il pulsante ' +
       'Avvia: premilo per far partire le descrizioni e premilo di nuovo, quando ' +
       'diventa Arresta, per fermarle. Per riascoltare questa guida c’è il pulsante ' +
       'Rivedi la guida, in alto.',
     voice:
-      'Sei pronto. Premi Ho capito per chiudere la guida. Nella schermata trovi il ' +
+      'Sei pronto: hai provato tutte e due le modalità. Premi Ho capito per ' +
+      'chiudere la guida. Nella schermata trovi il ' +
       'pulsante Avvia: premilo per far partire le descrizioni, e premilo di nuovo, ' +
       'quando diventa Arresta, per fermarle. Per riascoltare questa guida c’è il ' +
       'pulsante Rivedi la guida, in alto.',

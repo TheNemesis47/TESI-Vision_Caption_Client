@@ -43,6 +43,7 @@ import {
 import { calculatePreviewContentRect } from './pointingOverlayGeometry'
 import HandLandmarksLayer from './HandLandmarksLayer'
 import TutorialOverlay from './TutorialOverlay'
+import { TUTORIAL_STEPS, type TutorialStep } from '../domain/tutorial'
 import { useTutorial } from '../hooks/useTutorial'
 import { AudioPlaybackQueue } from '../services/audioPlaybackQueue'
 
@@ -596,6 +597,33 @@ export function Dashboard() {
     else startCapture()
   }, [isCaptureRunning, startCapture, stopCapture])
 
+  // I passi di prova accendono davvero la fotocamera: chi finisce la guida
+  // ha già sentito una descrizione in automatica e una puntando il dito,
+  // invece di aver solo sentito spiegare come si fa.
+  const enterStep = useCallback(
+    (leaving: TutorialStep | undefined, entering: TutorialStep | undefined) => {
+      if (entering?.practice) {
+        applyModeChangeRef.current(entering.practice)
+        if (!captureActiveRef.current) startCapture()
+        return
+      }
+      if (leaving?.practice && captureActiveRef.current) stopCapture()
+    },
+    [startCapture, stopCapture],
+  )
+
+  const handleTutorialNext = useCallback(() => {
+    const leaving = TUTORIAL_STEPS[tutorial.stepIndex]
+    const entering = TUTORIAL_STEPS[tutorial.stepIndex + 1]
+    tutorial.next()
+    enterStep(leaving, entering)
+  }, [enterStep, tutorial])
+
+  const handleTutorialClose = useCallback(() => {
+    enterStep(TUTORIAL_STEPS[tutorial.stepIndex], undefined)
+    tutorial.close()
+  }, [enterStep, tutorial])
+
   const handleCaptionModeChange = useCallback(
     (nextMode: CaptionMode) => {
       if (nextMode === captionModeRef.current) return
@@ -923,8 +951,9 @@ export function Dashboard() {
             captionMode={captionMode}
             onCameraChange={handleCameraDeviceChange}
             onModeChange={handleCaptionModeChange}
-            onNext={tutorial.next}
-            onSkip={tutorial.close}
+            practiceCaption={tutorial.step?.practice ? caption : undefined}
+            onNext={handleTutorialNext}
+            onSkip={handleTutorialClose}
             onRepeat={tutorial.repeat}
             onToggleVoice={tutorial.toggleVoice}
           />

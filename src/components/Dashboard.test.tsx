@@ -175,3 +175,61 @@ describe('comandi della fotocamera', () => {
     )
   })
 })
+
+describe('prova guidata dentro il tutorial', () => {
+  beforeEach(() => {
+    videoRef.current = null
+    window.localStorage.clear()
+    webcam.zoomRange = null
+    webcam.applyZoom.mockClear()
+    // Qui la guida non è stata vista: si apre da sola.
+  })
+
+  const advance = async (label: string) => {
+    await userEvent.click(screen.getByRole('button', { name: label }))
+  }
+
+  it('fa provare prima l automatica e poi il puntamento, con la fotocamera accesa', async () => {
+    render(<Dashboard />)
+
+    await advance('Ascolta la guida')
+    await advance('Avanti') // fotocamera
+    await advance('Avanti') // modalità
+
+    expect(
+      screen.getByRole('heading', { name: /prova la modalità automatica/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('status', { name: 'Stato della prova' }),
+    ).toHaveTextContent('In ascolto')
+    expect(screen.getByRole('radio', { name: 'Auto' })).toBeChecked()
+    // La cattura parte da sola: la prova non si fa a fotocamera spenta.
+    expect(screen.getByRole('button', { name: 'Arresta' })).toBeInTheDocument()
+
+    await advance('Avanti')
+
+    expect(
+      screen.getByRole('heading', { name: /indicare col dito|indica col dito/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Punta' })).toBeChecked()
+
+    await advance('Avanti')
+
+    expect(screen.getByRole('heading', { name: 'Sei pronto' })).toBeInTheDocument()
+    // Finita la prova la cattura si ferma: riparte col pulsante Avvia.
+    expect(screen.getByRole('button', { name: 'Avvia' })).toBeInTheDocument()
+  })
+
+  it('chiudere la guida durante una prova spegne la cattura', async () => {
+    render(<Dashboard />)
+
+    await advance('Ascolta la guida')
+    await advance('Avanti')
+    await advance('Avanti')
+    expect(screen.getByRole('button', { name: 'Arresta' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Salta la guida' }))
+
+    expect(screen.getByRole('button', { name: 'Avvia' })).toBeInTheDocument()
+  })
+})

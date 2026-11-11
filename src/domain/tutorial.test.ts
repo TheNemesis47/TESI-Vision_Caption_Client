@@ -29,7 +29,7 @@ describe('memoria della guida', () => {
   it('una guida di versione diversa torna a mostrarsi', () => {
     window.localStorage.setItem('visioncaption.tutorial', 'v0')
     expect(hasSeenTutorial()).toBe(false)
-    expect(TUTORIAL_VERSION).toBe('v2')
+    expect(TUTORIAL_VERSION).toBe('v3')
   })
 
   it('la voce guida è accesa salvo che non sia stata spenta', () => {
@@ -62,7 +62,7 @@ describe('i passi della guida', () => {
 
   it('ogni passo parlato ha la sua traccia', () => {
     const spoken = TUTORIAL_STEPS.filter((step) => step.voice)
-    expect(spoken).toHaveLength(3)
+    expect(spoken).toHaveLength(5)
     expect(spoken.every((step) => step.audio?.startsWith('/tutorial/'))).toBe(true)
   })
 
@@ -72,7 +72,24 @@ describe('i passi della guida', () => {
       'camera',
       'mode',
       undefined,
+      undefined,
+      undefined,
     ])
+  })
+
+  it('si prova davvero una modalità alla volta, prima di restare soli', () => {
+    // Il riscontro di chi ha visto i test: finita la spiegazione l'utente
+    // deve aver già sentito una descrizione in automatica e una puntando.
+    expect(TUTORIAL_STEPS.map((step) => step.practice)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      'AUTO',
+      'POINTING',
+      undefined,
+    ])
+    // L'ultimo passo non è una prova: chiude la guida.
+    expect(TUTORIAL_STEPS.at(-1)?.practice).toBeUndefined()
   })
 })
 

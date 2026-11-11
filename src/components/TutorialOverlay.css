@@ -180,3 +180,29 @@
     transition: none;
   }
 }
+
+/* Nei passi di prova la guida si fa da parte: la fotocamera deve vedersi,
+   altrimenti non si può provare niente. La scheda scende in basso e resta
+   larga abbastanza da leggere il riscontro. */
+.tutorial-backdrop.is-practice {
+  background: transparent;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.tutorial-backdrop.is-practice .tutorial-card {
+  pointer-events: auto;
+  margin-bottom: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.tutorial-practice {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  line-height: 1.4;
+}

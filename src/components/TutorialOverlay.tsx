@@ -12,6 +12,8 @@ type TutorialOverlayProps = {
   cameraDevices: CameraDevice[]
   selectedCameraId: string
   captionMode: CaptionMode
+  /** L'ultima descrizione sentita: nei passi di prova è il riscontro. */
+  practiceCaption?: string
   onCameraChange: (deviceId: string) => void
   onModeChange: (mode: CaptionMode) => void
   onNext: () => void
@@ -28,6 +30,7 @@ export default function TutorialOverlay({
   cameraDevices,
   selectedCameraId,
   captionMode,
+  practiceCaption,
   onCameraChange,
   onModeChange,
   onNext,
@@ -51,9 +54,12 @@ export default function TutorialOverlay({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onSkip])
 
+  const isPractice = Boolean(step.practice)
+  const heard = isPractice && Boolean(practiceCaption?.trim())
+
   return (
     <div
-      className="tutorial-backdrop"
+      className={`tutorial-backdrop${isPractice ? ' is-practice' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="tutorial-title"
@@ -72,6 +78,21 @@ export default function TutorialOverlay({
           {step.title}
         </h2>
         <p className="tutorial-body">{step.body}</p>
+
+        {isPractice && (
+          // aria-live: chi non vede deve sapere che la descrizione è
+          // arrivata anche se la voce è coperta da altro.
+          <p
+            className="tutorial-practice"
+            role="status"
+            aria-label="Stato della prova"
+            aria-live="polite"
+          >
+            {heard
+              ? `Hai sentito: ${practiceCaption}`
+              : 'In ascolto: muovi il telefono e aspetta la descrizione.'}
+          </p>
+        )}
 
         {step.control === 'camera' && (
           <div className="tutorial-control">
