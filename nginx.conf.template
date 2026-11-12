@@ -50,6 +50,18 @@ server {
         proxy_buffering off;
     }
 
+    # La creazione di una modalità dettata a parole: il server la accetta
+    # solo se è stata accesa, e un modello grande può pensarci un minuto.
+    location = /modes {
+        set $modes_upstream "${VISION_SERVER}";
+        proxy_pass http://$modes_upstream/modes;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 240s;
+        proxy_send_timeout 240s;
+    }
+
     location = /health {
         set $health_upstream "${VISION_SERVER}";
         proxy_pass http://$health_upstream/health;

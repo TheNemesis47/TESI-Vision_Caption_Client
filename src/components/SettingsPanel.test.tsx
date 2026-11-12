@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_PREFERENCES } from '../domain/preferences'
@@ -130,5 +130,36 @@ describe('il pannello delle impostazioni', () => {
       .filter((elemento) => elemento.getAttribute('tabindex') !== '-1')
 
     expect(raggiungibili.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('il campo della modalità dettata compare solo dove il server lo accetta', () => {
+    apri()
+    expect(screen.queryByLabelText('Una modalità tua')).toBeNull()
+
+    cleanup()
+    apri({ canCreateModes: true })
+    expect(screen.getByLabelText('Una modalità tua')).toBeVisible()
+  })
+
+  it('il pulsante resta spento finché la frase è troppo corta', () => {
+    apri({ canCreateModes: true })
+
+    const pulsante = screen.getByRole('button', { name: 'Crea la modalità' })
+    expect(pulsante).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Una modalità tua'), {
+      target: { value: 'lavoro in officina e mi servono gli attrezzi' },
+    })
+
+    expect(pulsante).toBeEnabled()
+  })
+
+  it('il campo è grande almeno 17px, o Safari ingrandisce la pagina da sé', () => {
+    apri({ canCreateModes: true })
+
+    // Sotto i 16px iOS zooma al fuoco e il pannello scappa sotto le dita.
+    expect(screen.getByLabelText('Una modalità tua').className).toContain(
+      'settings-field',
+    )
   })
 })

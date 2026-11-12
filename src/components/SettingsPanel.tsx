@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import {
   CAPTION_INTERVALS,
@@ -11,6 +11,11 @@ import {
   type TextScale,
   type Verbosity,
 } from '../domain/preferences'
+import {
+  DESCRIPTION_MIN_LENGTH,
+  createMode,
+  type CreatedMode,
+} from '../services/modeCreation'
 import './SettingsPanel.css'
 
 /**
@@ -33,6 +38,10 @@ type SettingsPanelProps = {
   onSaveLesson?: () => void
   /** Le modalità che il server dichiara di avere. */
   modes?: CameraMode[]
+  /** Se il server accetta una modalità nuova dettata a parole. */
+  canCreateModes?: boolean
+  /** Una modalità appena creata, per chi tiene l'elenco. */
+  onModeCreated?: (mode: CreatedMode) => void
   /** Quante descrizioni ci sono da salvare; zero nasconde il pulsante. */
   savedDescriptions?: number
 }
@@ -91,9 +100,15 @@ export function SettingsPanel({
   onRestartTutorial,
   onSaveLesson,
   modes = [],
+  canCreateModes = false,
+  onModeCreated,
   savedDescriptions = 0,
 }: SettingsPanelProps) {
   const titleId = useId()
+  const descriptionId = useId()
+  const [description, setDescription] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [creationMessage, setCreationMessage] = useState('')
   const panelRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
 
@@ -242,6 +257,55 @@ export function SettingsPanel({
                 {savedDescriptions === 1
                   ? 'Una descrizione da rileggere più tardi.'
                   : `${savedDescriptions} descrizioni da rileggere più tardi.`}
+              </p>
+            </div>
+          )}
+
+          {canCreateModes && (
+            <div className="settings-group">
+              <label className="settings-legend" htmlFor={descriptionId}>
+                Una modalità tua
+              </label>
+              <p className="settings-hint">
+                Racconta in una frase dove la usi e cosa ti serve sapere. Per
+                dettarla, usa il microfono della tastiera.
+              </p>
+              <textarea
+                id={descriptionId}
+                className="settings-field"
+                rows={3}
+                value={description}
+                maxLength={400}
+                disabled={creating}
+                placeholder="Lavoro in officina, dimmi solo gli attrezzi e dove stanno"
+                onChange={(event) => setDescription(event.target.value)}
+              />
+              <button
+                type="button"
+                className="settings-action"
+                disabled={creating || description.trim().length < DESCRIPTION_MIN_LENGTH}
+                onClick={async () => {
+                  setCreating(true)
+                  setCreationMessage('Sto scrivendo la modalità…')
+                  const esito = await createMode(description)
+                  setCreating(false)
+                  if (esito.ok) {
+                    // Il nome della modalità nuova è la conferma: chi ascolta
+                    // sente che esiste e come si chiama.
+                    setCreationMessage(`Modalità «${esito.mode.label}» creata.`)
+                    setDescription('')
+                    onModeCreated?.(esito.mode)
+                  } else {
+                    setCreationMessage(esito.message)
+                  }
+                }}
+              >
+                {creating ? 'Sto scrivendo…' : 'Crea la modalità'}
+              </button>
+              {/* Il messaggio è annunciato: una modalità creata o un errore
+                  non si capiscono guardando il campo svuotarsi. */}
+              <p className="settings-hint" role="status" aria-live="polite">
+                {creationMessage}
               </p>
             </div>
           )}

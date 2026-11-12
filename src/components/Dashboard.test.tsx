@@ -330,3 +330,63 @@ describe('prova guidata dentro il tutorial', () => {
     expect(screen.getByRole('button', { name: 'Avvia' })).toBeInTheDocument()
   })
 })
+
+describe('le impostazioni dalla vista ordinaria', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    rememberTutorialSeen()
+  })
+
+  it('si aprono da un pulsante con un nome, non da un ingranaggio muto', async () => {
+    render(<Dashboard />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Impostazioni' }))
+
+    expect(screen.getByRole('dialog', { name: 'Impostazioni' })).toBeVisible()
+    expect(
+      screen.getByRole('group', { name: 'Velocità della voce' }),
+    ).toBeInTheDocument()
+  })
+
+  it('una velocità scelta resta sul telefono per la prossima apertura', async () => {
+    render(<Dashboard />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Impostazioni' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Doppia' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Chiudi' }))
+
+    expect(window.localStorage.getItem('visioncaption.preferenze.v1')).toContain(
+      '"speechRate":2',
+    )
+  })
+
+  it('il contrasto alto cambia la pagina intera, non solo il pannello', async () => {
+    render(<Dashboard />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Impostazioni' }))
+    await userEvent.click(screen.getByRole('button', { name: /Contrasto alto/ }))
+
+    // Vale anche per i comandi della fotocamera e per la guida, che non
+    // ricevono le preferenze come proprietà.
+    expect(document.documentElement.dataset.contrasto).toBe('alto')
+  })
+
+  it('il testo più grande arriva alla didascalia come scala, non come classe', async () => {
+    render(<Dashboard />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Impostazioni' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Molto grande' }))
+
+    expect(
+      document.documentElement.style.getPropertyValue('--scala-testo'),
+    ).toBe('1.8')
+  })
+
+  it('senza modalità dichiarate dal server la scelta non compare vuota', async () => {
+    render(<Dashboard />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Impostazioni' }))
+
+    expect(screen.queryByRole('group', { name: 'Modalità' })).toBeNull()
+  })
+})

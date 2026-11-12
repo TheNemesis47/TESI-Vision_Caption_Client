@@ -70,6 +70,7 @@ describe('parseVisionServerMessage', () => {
         pointing_fps: 10,
         max_in_flight: 1,
         modes: [],
+        can_create_modes: false,
       },
     })
   })
@@ -91,6 +92,7 @@ describe('parseVisionServerMessage', () => {
         pointing_fps: 10,
         max_in_flight: 1,
         modes: [],
+        can_create_modes: false,
       },
     })
   })

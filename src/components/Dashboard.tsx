@@ -38,6 +38,7 @@ import {
   type CaptionMode,
   type CaptureState,
   type SentFrameMetadata,
+  type ServerMode,
   type StreamConfigServerMessage,
   type VisionServerMessage,
 } from '../domain/visionProtocol'
@@ -164,6 +165,9 @@ export function Dashboard() {
   const [descriptions, setDescriptions] = useState<string[]>([])
 
   const { preferences, updatePreferences } = usePreferences()
+  // Una modalità creata adesso non è ancora nell'elenco che il server ha
+  // mandato all'apertura: si aggiunge qui, senza riconnettere.
+  const [createdModes, setCreatedModes] = useState<ServerMode[]>([])
   // Le preferenze che cambiano le descrizioni viaggiano su ogni fotogramma.
   const framePreferences = useMemo(
     () => sessionPreferences(preferences),
@@ -1060,7 +1064,17 @@ export function Dashboard() {
             onRestartTutorial={isCaptureRunning ? undefined : handleRestartTutorial}
             onSaveLesson={handleSaveLesson}
             savedDescriptions={descriptions.length}
-            modes={streamConfig?.modes ?? []}
+            modes={[...(streamConfig?.modes ?? []), ...createdModes]}
+            canCreateModes={streamConfig?.can_create_modes ?? false}
+            onModeCreated={(mode) => {
+              setCreatedModes((current) =>
+                current.some((item) => item.id === mode.id)
+                  ? current
+                  : [...current, { id: mode.id, label: mode.label }],
+              )
+              // Chi la crea la vuole usare: diventa la modalità scelta.
+              updatePreferences({ mode: mode.id })
+            }}
           />
         )}
 

@@ -114,6 +114,8 @@ export type StreamConfigServerMessage = {
   max_in_flight: number
   /** Le modalità fra cui si può scegliere; vuoto se il server è più vecchio. */
   modes: ServerMode[]
+  /** Se questo server lascia creare una modalità nuova dettandola. */
+  can_create_modes: boolean
 }
 
 export type FrameDoneServerMessage = {
@@ -411,6 +413,7 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
         // Un server più vecchio non le manda: l'elenco resta vuoto e il
         // pannello non mostra la scelta invece di mostrarla vuota.
         modes: parseServerModes(parsed.modes),
+        can_create_modes: parsed.can_create_modes === true,
       },
     }
   }
