@@ -1,6 +1,15 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 
 import {DEFAULT_FACING, type CameraFacing} from "../domain/cameraZoom";
+import {
+    FOCUS_RESTORE_MS,
+    continuousFocusConstraints,
+    describeCameraCapabilities,
+    focusConstraints,
+    readFocusSupport,
+    type FocusPoint,
+    type FocusSupport,
+} from "../domain/cameraFocus";
 
 type UseWebcamOptions = {
     deviceId?: string;
@@ -39,14 +48,47 @@ export function useWebcam({
 }: UseWebcamOptions = {}) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+    const restoreFocusTimerRef = useRef<number | undefined>(undefined);
+    const [focusSupport, setFocusSupport] = useState<FocusSupport | null>(null);
+    const [cameraCapabilities, setCameraCapabilities] = useState<string>('');
     const [isActive, setIsActive] = useState<boolean>(false);
     const [isMirrored, setIsMirrored] = useState<boolean>(false);
     const [activeDeviceId, setActiveDeviceId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
 
     const releaseStream = useCallback(() => {
+        window.clearTimeout(restoreFocusTimerRef.current);
         streamRef.current?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
+        videoTrackRef.current = null;
+    }, []);
+
+    /**
+     * Mette a fuoco sul punto toccato, in coordinate 0–1 del fotogramma.
+     * Restituisce false quando l'obiettivo non lascia comandare il fuoco: chi
+     * chiama non deve mostrare un riscontro per qualcosa che non è successo.
+     */
+    const focusAt = useCallback(async (point: FocusPoint): Promise<boolean> => {
+        const track = videoTrackRef.current;
+        const support = readFocusSupport(track);
+        if (!track?.applyConstraints || !support) return false;
+        const richiesta = focusConstraints(support, point);
+        if (!richiesta) return false;
+        try {
+            await track.applyConstraints(richiesta.constraints);
+        } catch {
+            return false;
+        }
+        if (richiesta.restoreContinuous) {
+            // Lo scatto singolo blocca il fuoco su quel piano: chi non vede
+            // non se ne accorgerebbe, quindi il continuo si rimette da sé.
+            window.clearTimeout(restoreFocusTimerRef.current);
+            restoreFocusTimerRef.current = window.setTimeout(() => {
+                void track.applyConstraints(continuousFocusConstraints()).catch(() => undefined);
+            }, FOCUS_RESTORE_MS);
+        }
+        return true;
     }, []);
 
     useEffect(() => {
@@ -145,6 +187,9 @@ export function useWebcam({
 
             streamRef.current = stream;
             const videoTrack = stream.getVideoTracks()[0] ?? null;
+            videoTrackRef.current = videoTrack;
+            setFocusSupport(readFocusSupport(videoTrack));
+            setCameraCapabilities(describeCameraCapabilities(videoTrack));
             const settings = videoTrack?.getSettings?.();
             videoTrack?.addEventListener?.('ended', handleTrackEnded);
 
@@ -181,5 +226,14 @@ export function useWebcam({
     // cambio di obiettivo.
     useEffect(() => releaseStream, [releaseStream]);
 
-    return { videoRef, isActive, isMirrored, activeDeviceId, error };
+    return {
+        videoRef,
+        isActive,
+        isMirrored,
+        activeDeviceId,
+        error,
+        focusAt,
+        canFocus: focusSupport !== null,
+        cameraCapabilities,
+    };
 }

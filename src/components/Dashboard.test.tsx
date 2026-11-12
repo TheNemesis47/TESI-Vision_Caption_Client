@@ -1,5 +1,5 @@
 import { createRef } from 'react'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Dashboard from './Dashboard'
@@ -18,6 +18,9 @@ const webcam = {
   facing: '' as string,
   /** L'obiettivo acceso: vuoto significa quello predefinito del verso. */
   deviceId: '' as string | undefined,
+  mirrored: false,
+  canFocus: false,
+  focusAt: vi.fn(async () => true),
 }
 
 const cameras = { devices: IPHONE as { deviceId: string; label: string }[] }
@@ -29,8 +32,11 @@ vi.mock('../hooks/useWebcam', () => ({
     return {
       videoRef,
       isActive: true,
-      isMirrored: false,
+      isMirrored: webcam.mirrored,
       error: null,
+      focusAt: webcam.focusAt,
+      canFocus: webcam.canFocus,
+      cameraCapabilities: 'zoom no · fuoco continuous · punto sì',
     }
   },
 }))
@@ -61,6 +67,9 @@ describe('Dashboard end-user', () => {
   beforeEach(() => {
     videoRef.current = null
     cameras.devices = IPHONE
+    webcam.mirrored = false
+    webcam.canFocus = false
+    webcam.focusAt.mockClear()
     window.localStorage.clear()
     // La vista ordinaria è quella di chi la guida l'ha già vista.
     rememberTutorialSeen()
@@ -204,6 +213,68 @@ describe('comandi della fotocamera', () => {
       'aria-pressed',
       'true',
     )
+  })
+})
+
+describe('tocco per mettere a fuoco', () => {
+  beforeEach(() => {
+    videoRef.current = null
+    cameras.devices = IPHONE
+    webcam.mirrored = false
+    webcam.canFocus = true
+    webcam.focusAt.mockClear()
+    window.localStorage.clear()
+    rememberTutorialSeen()
+  })
+
+  const tocca = (container: HTMLElement, clientX: number, clientY: number) => {
+    const strato = container.querySelector('.focus-layer') as HTMLElement | null
+    if (!strato) return null
+    strato.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 400, height: 800 }) as DOMRect
+    fireEvent.click(strato, { clientX, clientY })
+    return strato
+  }
+
+  it('se l obiettivo non lascia comandare il fuoco, il tocco non c è', () => {
+    webcam.canFocus = false
+    const { container } = render(<Dashboard />)
+
+    // Meglio nessun gesto che un gesto che non fa niente: è lo stesso
+    // motivo per cui il cursore dello zoom è stato tolto.
+    expect(container.querySelector('.focus-layer')).not.toBeInTheDocument()
+  })
+
+  it('tocca il punto inquadrato e mostra l anello solo se è stato accettato', async () => {
+    const { container } = render(<Dashboard />)
+
+    tocca(container, 100, 200)
+
+    await waitFor(() =>
+      expect(webcam.focusAt).toHaveBeenCalledWith({ x: 0.25, y: 0.25 }),
+    )
+    await waitFor(() => expect(container.querySelector('.focus-ring')).toBeInTheDocument())
+  })
+
+  it('con la fotocamera frontale il punto è specchiato, come l anteprima', async () => {
+    webcam.mirrored = true
+    const { container } = render(<Dashboard />)
+
+    tocca(container, 100, 200)
+
+    await waitFor(() =>
+      expect(webcam.focusAt).toHaveBeenCalledWith({ x: 0.75, y: 0.25 }),
+    )
+  })
+
+  it('se l obiettivo rifiuta, niente anello: nessun riscontro falso', async () => {
+    webcam.focusAt.mockResolvedValueOnce(false)
+    const { container } = render(<Dashboard />)
+
+    tocca(container, 100, 200)
+
+    await waitFor(() => expect(webcam.focusAt).toHaveBeenCalled())
+    expect(container.querySelector('.focus-ring')).not.toBeInTheDocument()
   })
 })
 

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import './Dashboard.css'
 import {
   captureVideoFrame,
@@ -155,6 +162,9 @@ export function Dashboard() {
     isActive: isWebcamActive,
     isMirrored,
     error: webcamError,
+    focusAt,
+    canFocus,
+    cameraCapabilities,
   } = useWebcam({
     deviceId: lensDeviceId || undefined,
     enabled: true,
@@ -684,6 +694,35 @@ export function Dashboard() {
 
   // Girando la fotocamera gli obiettivi cambiano: davanti ce n'è uno solo,
   // e un 0,5× rimasto acceso punterebbe a un vetro che non c'è più.
+  // Il telefono mette a fuoco da solo; toccare serve quando nell'inquadratura
+  // ci sono due piani e l'automatismo sceglie quello sbagliato. L'anello
+  // compare solo se l'obiettivo ha davvero accettato il punto: un riscontro
+  // per un comando che non c'è sarebbe peggio di nessun riscontro.
+  const [focusRing, setFocusRing] = useState<{ left: number; top: number; key: number } | null>(
+    null,
+  )
+  const focusRingTimerRef = useRef<number | undefined>(undefined)
+
+  const handleFocusTap = useCallback(
+    async (event: ReactMouseEvent<HTMLButtonElement>) => {
+      const area = event.currentTarget.getBoundingClientRect()
+      if (!area.width || !area.height) return
+      const left = event.clientX - area.left
+      const top = event.clientY - area.top
+      const x = left / area.width
+      // Con la fotocamera frontale l'anteprima è specchiata: il punto che il
+      // sensore deve guardare sta dall'altra parte.
+      const applicato = await focusAt({ x: isMirrored ? 1 - x : x, y: top / area.height })
+      if (!applicato) return
+      setFocusRing({ left, top, key: Date.now() })
+      window.clearTimeout(focusRingTimerRef.current)
+      focusRingTimerRef.current = window.setTimeout(() => setFocusRing(null), 900)
+    },
+    [focusAt, isMirrored],
+  )
+
+  useEffect(() => () => window.clearTimeout(focusRingTimerRef.current), [])
+
   const handleFacingChange = useCallback((nextFacingValue: CameraFacing) => {
     setZoom(DEFAULT_ZOOM)
     setLensDeviceId('')
@@ -829,6 +868,28 @@ export function Dashboard() {
           </div>
         )}
 
+        {canFocus && (
+          // aria-hidden e fuori dal percorso dei tasti: il fuoco automatico
+          // continua a funzionare da solo, questo è un di più per chi vede e
+          // inquadra due piani. Non toglie niente a chi naviga a tastiera.
+          <button
+            type="button"
+            className="focus-layer"
+            onClick={handleFocusTap}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+        )}
+
+        {focusRing && (
+          <span
+            key={focusRing.key}
+            className="focus-ring"
+            style={{ left: `${focusRing.left}px`, top: `${focusRing.top}px` }}
+            aria-hidden="true"
+          />
+        )}
+
         <div className="camera-scrim camera-scrim-top" aria-hidden="true" />
         <div className="camera-scrim camera-scrim-bottom" aria-hidden="true" />
 
@@ -901,6 +962,12 @@ export function Dashboard() {
           <span aria-hidden="true" />
           {activityLabel}
         </div>
+
+        {showDiagnosticOverlays && cameraCapabilities && (
+          <p className="camera-capabilities" aria-hidden="true">
+            {cameraCapabilities}
+          </p>
+        )}
 
         {caption && (
           <p className="caption-text" aria-live="polite" aria-atomic="true">
