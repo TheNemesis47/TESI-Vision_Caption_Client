@@ -1,44 +1,50 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './TutorialOverlay.css'
-import type { TutorialStep } from '../domain/tutorial'
+import { spokenText, type TutorialStep } from '../domain/tutorial'
 import type { CaptionMode } from '../domain/visionProtocol'
-import type { CameraDevice } from '../hooks/useCameraDevices'
 
 type TutorialOverlayProps = {
   step: TutorialStep
   stepIndex: number
   stepCount: number
   isVoiceEnabled: boolean
-  cameraDevices: CameraDevice[]
-  selectedCameraId: string
   captionMode: CaptionMode
+  /** Vero mentre la fotocamera sta guardando, nei passi di prova. */
+  isPracticeRunning: boolean
   /** L'ultima descrizione sentita: nei passi di prova è il riscontro. */
   practiceCaption?: string
-  onCameraChange: (deviceId: string) => void
   onModeChange: (mode: CaptionMode) => void
+  onPracticeStart: () => void
   onNext: () => void
   onSkip: () => void
   onRepeat: () => void
   onToggleVoice: () => void
 }
 
+/**
+ * Quanto si aspetta una descrizione prima di sbloccare comunque il passo.
+ * Senza questa via d'uscita, un server lento o una scena che non ha niente da
+ * dire lascerebbero la guida ferma su un pulsante spento.
+ */
+const PRACTICE_TIMEOUT_MS = 15_000
+
 export default function TutorialOverlay({
   step,
   stepIndex,
   stepCount,
   isVoiceEnabled,
-  cameraDevices,
-  selectedCameraId,
   captionMode,
+  isPracticeRunning,
   practiceCaption,
-  onCameraChange,
   onModeChange,
+  onPracticeStart,
   onNext,
   onSkip,
   onRepeat,
   onToggleVoice,
 }: TutorialOverlayProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const [practiceTimedOut, setPracticeTimedOut] = useState(false)
 
   // Il fuoco torna sul titolo a ogni passo: è così che un lettore di schermo
   // annuncia il passo nuovo senza che l'utente debba cercarlo.
@@ -56,6 +62,38 @@ export default function TutorialOverlay({
 
   const isPractice = Boolean(step.practice)
   const heard = isPractice && Boolean(practiceCaption?.trim())
+
+  useEffect(() => {
+    if (!isPracticeRunning || heard) return
+    const timer = window.setTimeout(
+      () => setPracticeTimedOut(true),
+      PRACTICE_TIMEOUT_MS,
+    )
+    return () => window.clearTimeout(timer)
+  }, [heard, isPracticeRunning])
+
+  // L'attesa si azzera da chi preme, non da un effetto: così il passo
+  // seguente non eredita l'attesa di quello appena finito.
+  const startPractice = useCallback(() => {
+    setPracticeTimedOut(false)
+    onPracticeStart()
+  }, [onPracticeStart])
+
+  const goNext = useCallback(() => {
+    setPracticeTimedOut(false)
+    onNext()
+  }, [onNext])
+  // Finché la prova non è stata fatta il pulsante è Prova: premerlo ferma la
+  // voce della guida e accende la fotocamera, così la descrizione non arriva
+  // mentre la guida sta ancora parlando.
+  const waitingForPractice = isPractice && !heard && !practiceTimedOut
+  const practiceStatus = heard
+    ? `Hai sentito: ${practiceCaption}`
+    : practiceTimedOut
+      ? 'Non è arrivata nessuna descrizione: premi Riprova oppure vai avanti.'
+      : isPracticeRunning
+        ? 'In ascolto: tieni il telefono fermo e aspetta la descrizione.'
+        : 'Quando sei pronto premi Prova.'
 
   return (
     <div
@@ -81,39 +119,15 @@ export default function TutorialOverlay({
 
         {isPractice && (
           // aria-live: chi non vede deve sapere che la descrizione è
-          // arrivata anche se la voce è coperta da altro.
+          // arrivata anche quando la voce della guida è spenta.
           <p
-            className="tutorial-practice"
+            className={`tutorial-practice${heard ? ' is-heard' : ''}`}
             role="status"
             aria-label="Stato della prova"
             aria-live="polite"
           >
-            {heard
-              ? `Hai sentito: ${practiceCaption}`
-              : 'In ascolto: muovi il telefono e aspetta la descrizione.'}
+            {practiceStatus}
           </p>
-        )}
-
-        {step.control === 'camera' && (
-          <div className="tutorial-control">
-            <label htmlFor="tutorial-camera">Fotocamera</label>
-            <select
-              id="tutorial-camera"
-              value={selectedCameraId}
-              onChange={(event) => onCameraChange(event.target.value)}
-              disabled={cameraDevices.length === 0}
-            >
-              {cameraDevices.length === 0 ? (
-                <option value="">Ricerca fotocamere…</option>
-              ) : (
-                cameraDevices.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
         )}
 
         {step.control === 'mode' && (
@@ -143,10 +157,26 @@ export default function TutorialOverlay({
         )}
 
         <div className="tutorial-actions">
-          <button className="tutorial-next" type="button" onClick={onNext}>
-            {step.next}
-          </button>
-          {step.voice && (
+          {waitingForPractice ? (
+            <button
+              className="tutorial-next"
+              type="button"
+              onClick={startPractice}
+              disabled={isPracticeRunning}
+            >
+              {isPracticeRunning ? 'In ascolto…' : (step.start ?? 'Prova')}
+            </button>
+          ) : (
+            <button className="tutorial-next" type="button" onClick={goNext}>
+              {step.next}
+            </button>
+          )}
+          {practiceTimedOut && !heard && (
+            <button className="tutorial-secondary" type="button" onClick={startPractice}>
+              Riprova
+            </button>
+          )}
+          {spokenText(step) && !isPracticeRunning && (
             <button className="tutorial-secondary" type="button" onClick={onRepeat}>
               Ripeti
             </button>

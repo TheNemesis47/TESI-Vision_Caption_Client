@@ -1,3 +1,4 @@
+import { cropForZoom } from '../domain/cameraZoom'
 import { stripJpegDataUrlPrefix } from '../domain/visionProtocol'
 
 export type FrameDimensions = {
@@ -14,6 +15,13 @@ type CaptureFrameOptions = {
   maxWidth?: number
   maxHeight?: number
   jpegQuality?: number
+  /**
+   * Ritaglio al centro, per i livelli di zoom che l'obiettivo non copre.
+   * Vale anche per l'anteprima, con lo stesso fattore: il server vede
+   * esattamente l'inquadratura che vede chi tiene il telefono, altrimenti il
+   * dito indicherebbe un punto fuori dall'immagine ricevuta.
+   */
+  zoom?: number
 }
 
 export const shouldSkipFrameForBackpressure = (
@@ -68,20 +76,15 @@ export const captureVideoFrame = async (
     maxWidth = 1280,
     maxHeight = 720,
     jpegQuality = 0.86,
+    zoom = 1,
   }: CaptureFrameOptions = {},
 ): Promise<CapturedFrame> => {
   if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     throw new Error('Webcam non pronta')
   }
 
-  const sourceWidth = video.videoWidth
-  const sourceHeight = video.videoHeight
-  const { width, height } = calculateFrameDimensions(
-    sourceWidth,
-    sourceHeight,
-    maxWidth,
-    maxHeight,
-  )
+  const { sx, sy, sw, sh } = cropForZoom(video.videoWidth, video.videoHeight, zoom)
+  const { width, height } = calculateFrameDimensions(sw, sh, maxWidth, maxHeight)
 
   canvas.width = width
   canvas.height = height
@@ -90,8 +93,9 @@ export const captureVideoFrame = async (
     throw new Error('Contesto canvas non disponibile')
   }
 
-  // Disegna l'intero frame senza crop o mirroring: preview e backend vedono la stessa scena.
-  context.drawImage(video, 0, 0, sourceWidth, sourceHeight, 0, 0, width, height)
+  // Nessun mirroring, e lo stesso ritaglio dell'anteprima: preview e backend
+  // vedono la stessa scena.
+  context.drawImage(video, sx, sy, sw, sh, 0, 0, width, height)
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(

@@ -3,13 +3,22 @@
    bene dove sta premendo. */
 .tutorial-backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* dvh e non vh: su Safari la barra in basso resta sopra la pagina, e con
+     vh il pulsante del passo finisce sotto la barra, tagliato a metà. */
+  height: 100dvh;
   z-index: 40;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  background: rgba(4, 10, 14, 0.92);
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  background: rgba(4, 10, 14, 0.97);
 }
 
 .tutorial-card {
@@ -119,11 +128,18 @@
   background: rgba(86, 200, 216, 0.14);
 }
 
+/* I pulsanti restano attaccati al fondo della scheda anche quando il testo
+   è più lungo dello spazio: se scorressero via, chi legge vedrebbe un passo
+   senza modo di proseguire, che è il difetto segnalato dai primi utenti. */
 .tutorial-actions {
+  position: sticky;
+  bottom: -24px;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 24px;
+  padding: 12px 0 24px;
+  background: #101a20;
 }
 
 .tutorial-next {
@@ -184,18 +200,29 @@
 /* Nei passi di prova la guida si fa da parte: la fotocamera deve vedersi,
    altrimenti non si può provare niente. La scheda scende in basso e resta
    larga abbastanza da leggere il riscontro. */
+/* Nei passi di prova la guida si fa da parte: l'anteprima deve restare
+   visibile, perché è quello che si sta imparando a inquadrare. La scheda
+   resta piena, non trasparente: sopra una scena qualunque un testo velato
+   non si legge. */
 .tutorial-backdrop.is-practice {
-  background: transparent;
   align-items: flex-end;
+  padding-top: 0;
+  background: linear-gradient(to top, rgba(4, 10, 14, 0.88) 60%, transparent);
   pointer-events: none;
 }
 
 .tutorial-backdrop.is-practice .tutorial-card {
   pointer-events: auto;
-  margin-bottom: 12px;
-  max-height: 46vh;
+  /* Il fondo lo tiene il padding della cornice, che conta la barra di
+     Safari: così l'ultimo pulsante resta sempre premibile. */
+  margin-bottom: 0;
+  max-height: min(68dvh, 540px);
   overflow-y: auto;
   box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.tutorial-practice.is-heard {
+  background: rgba(86, 200, 216, 0.14);
 }
 
 .tutorial-practice {

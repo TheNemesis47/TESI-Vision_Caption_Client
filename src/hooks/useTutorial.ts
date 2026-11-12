@@ -49,6 +49,9 @@ export function useTutorial() {
 
   const repeat = useCallback(() => speakCurrent(stepIndex), [speakCurrent, stepIndex])
 
+  /** Zittisce la guida: la prova non deve parlare sopra la descrizione. */
+  const stopVoice = useCallback(() => voiceRef.current?.stop(), [])
+
   const open = useCallback(() => {
     setStepIndex(0)
     setIsOpen(true)
@@ -75,6 +78,7 @@ export function useTutorial() {
     close,
     next,
     repeat,
+    stopVoice,
     toggleVoice,
   }
 }

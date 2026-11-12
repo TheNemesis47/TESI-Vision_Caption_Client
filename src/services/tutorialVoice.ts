@@ -1,4 +1,4 @@
-import type { TutorialStep } from '../domain/tutorial'
+import { spokenText, type TutorialStep } from '../domain/tutorial'
 
 /**
  * La voce della guida. Prima prova la traccia pre-generata, che ha lo stesso
@@ -15,7 +15,8 @@ export class TutorialVoice {
 
   async speak(step: TutorialStep): Promise<void> {
     this.stop()
-    if (!step.voice) return
+    const testo = spokenText(step)
+    if (!testo) return
 
     if (step.audio && typeof Audio !== 'undefined') {
       const audio = new Audio(step.audio)
@@ -29,7 +30,7 @@ export class TutorialVoice {
       }
     }
 
-    this.speakWithSystemVoice(step.voice)
+    this.speakWithSystemVoice(testo)
   }
 
   stop(): void {

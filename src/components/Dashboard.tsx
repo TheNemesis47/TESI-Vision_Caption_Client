@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './Dashboard.css'
 import {
   captureVideoFrame,
@@ -6,18 +6,17 @@ import {
 } from '../hooks/useFrameCapture'
 import {
   DEFAULT_FACING,
-  clampZoom,
+  DEFAULT_ZOOM,
+  findZoomOption,
+  zoomOptions,
   type CameraFacing,
-} from '../domain/cameraControls'
+} from '../domain/cameraZoom'
 import CameraControls from './CameraControls'
 import { announceMode } from '../services/modeAnnouncement'
 import { usePointingOverlay } from '../hooks/usePointingOverlay'
 import { useServerConnection } from '../hooks/useServerConnection'
 import { useWebcam } from '../hooks/useWebcam'
-import {
-  resolveAvailableCameraId,
-  useCameraDevices,
-} from '../hooks/useCameraDevices'
+import { useCameraDevices } from '../hooks/useCameraDevices'
 import {
   getConfiguredFrameIntervalMs,
   LatestFrameBuffer,
@@ -132,9 +131,11 @@ export function Dashboard() {
   const audioUnlockedRef = useRef(false)
 
   const [captionMode, setCaptionMode] = useState<CaptionMode>('AUTO')
-  const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [facing, setFacing] = useState<CameraFacing>(DEFAULT_FACING)
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+  // L'obiettivo acceso: lo decide il livello di zoom, non un elenco da
+  // scorrere. Vuoto significa quello predefinito del verso scelto.
+  const [lensDeviceId, setLensDeviceId] = useState('')
   const [caption, setCaption] = useState('')
   const [isCaptureRunning, setIsCaptureRunning] = useState(false)
   const [inactiveCaptureState, setInactiveCaptureState] =
@@ -153,12 +154,9 @@ export function Dashboard() {
     videoRef,
     isActive: isWebcamActive,
     isMirrored,
-    activeDeviceId,
     error: webcamError,
-    zoomRange,
-    applyZoom,
   } = useWebcam({
-    deviceId: selectedDeviceId || undefined,
+    deviceId: lensDeviceId || undefined,
     enabled: true,
     facing,
   })
@@ -170,8 +168,15 @@ export function Dashboard() {
     width: 0,
     height: 0,
   })
-  const { devices: cameraDevices, error: cameraDevicesError } =
-    useCameraDevices(isWebcamActive)
+  const { devices: cameraDevices } = useCameraDevices(isWebcamActive)
+  // I livelli dipendono dagli obiettivi che il telefono ha davvero: 0,5× è
+  // l'ultra-grandangolo, 2× il teleobiettivo, il resto è un ritaglio al
+  // centro del fotogramma.
+  const zoomChoices = useMemo(
+    () => zoomOptions(cameraDevices, facing),
+    [cameraDevices, facing],
+  )
+  const activeZoom = findZoomOption(zoomChoices, zoom)
   const tutorial = useTutorial()
 
   const getAudioQueue = useCallback(() => {
@@ -338,6 +343,13 @@ export function Dashboard() {
     }
   }, [updatePreviewRect, videoRef])
 
+  // La cattura gira dentro una callback stabile: il livello di ritaglio la
+  // raggiunge per riferimento, senza ricrearla a ogni cambio di zoom.
+  const zoomDigitalRef = useRef(1)
+  useEffect(() => {
+    zoomDigitalRef.current = activeZoom.digital
+  }, [activeZoom.digital])
+
   const captureLatestFrame = useCallback(async () => {
     if (!captureActiveRef.current || captureInProgressRef.current) return
     const video = videoRef.current
@@ -350,6 +362,7 @@ export function Dashboard() {
         maxWidth: frameMaxWidth,
         maxHeight: frameMaxHeight,
         jpegQuality,
+        zoom: zoomDigitalRef.current,
       })
       if (!captureActiveRef.current) return
 
@@ -597,19 +610,20 @@ export function Dashboard() {
     else startCapture()
   }, [isCaptureRunning, startCapture, stopCapture])
 
-  // I passi di prova accendono davvero la fotocamera: chi finisce la guida
-  // ha già sentito una descrizione in automatica e una puntando il dito,
-  // invece di aver solo sentito spiegare come si fa.
+  // I passi di prova accendono davvero la fotocamera, ma solo quando l'utente
+  // preme Prova: se partisse da sola, la descrizione arriverebbe mentre la
+  // guida sta ancora leggendo il passo, e le due voci si coprirebbero.
   const enterStep = useCallback(
     (leaving: TutorialStep | undefined, entering: TutorialStep | undefined) => {
+      if (captureActiveRef.current && (leaving?.practice || !entering?.practice)) {
+        stopCapture()
+      }
       if (entering?.practice) {
         applyModeChangeRef.current(entering.practice)
-        if (!captureActiveRef.current) startCapture()
-        return
+        setCaption('')
       }
-      if (leaving?.practice && captureActiveRef.current) stopCapture()
     },
-    [startCapture, stopCapture],
+    [stopCapture],
   )
 
   const handleTutorialNext = useCallback(() => {
@@ -623,6 +637,25 @@ export function Dashboard() {
     enterStep(TUTORIAL_STEPS[tutorial.stepIndex], undefined)
     tutorial.close()
   }, [enterStep, tutorial])
+
+  // La prova parte dal dito dell'utente: prima si zittisce la guida, poi la
+  // fotocamera guarda. Una voce alla volta.
+  const handlePracticeStart = useCallback(() => {
+    const step = TUTORIAL_STEPS[tutorial.stepIndex]
+    if (!step?.practice) return
+    tutorial.stopVoice()
+    applyModeChangeRef.current(step.practice)
+    setCaption('')
+    if (!captureActiveRef.current) startCapture()
+  }, [startCapture, tutorial])
+
+  // Sentita la descrizione, la prova è finita: senza questo la fotocamera
+  // continuerebbe a descrivere mentre l'utente legge il riscontro.
+  const practiceMode = tutorial.isOpen ? tutorial.step?.practice : undefined
+  useEffect(() => {
+    if (!practiceMode || !caption.trim()) return
+    if (captureActiveRef.current) stopCapture()
+  }, [caption, practiceMode, stopCapture])
 
   const handleCaptionModeChange = useCallback(
     (nextMode: CaptionMode) => {
@@ -651,40 +684,23 @@ export function Dashboard() {
     applyModeChangeRef.current = handleCaptionModeChange
   }, [handleCaptionModeChange])
 
-  // Lo zoom segue la fotocamera: cambiando obiettivo la corsa cambia, e il
-  // valore della vecchia non significa niente sulla nuova. Si ricava qui
-  // invece di inseguirlo con un effetto, che lo mostrerebbe fuori corsa per
-  // un fotogramma.
-  const effectiveZoom = zoomRange ? clampZoom(zoom, zoomRange) : 1
-
-  const handleFacingChange = useCallback(
-    (nextFacingValue: CameraFacing) => {
-      if (isCaptureRunning) return
-      // Una fotocamera scelta a mano vincerebbe sul verso: si libera.
-      setSelectedDeviceId('')
-      setFacing(nextFacingValue)
-    },
-    [isCaptureRunning],
-  )
+  // Girando la fotocamera gli obiettivi cambiano: davanti ce n'è uno solo,
+  // e un 0,5× rimasto acceso punterebbe a un vetro che non c'è più.
+  const handleFacingChange = useCallback((nextFacingValue: CameraFacing) => {
+    setZoom(DEFAULT_ZOOM)
+    setLensDeviceId('')
+    setFacing(nextFacingValue)
+  }, [])
 
   const handleZoomChange = useCallback(
-    (value: number) => {
-      if (!zoomRange) return
-      const wanted = clampZoom(value, zoomRange)
-      setZoom(wanted)
-      void applyZoom(wanted)
+    (factor: number) => {
+      const chosen = findZoomOption(zoomChoices, factor)
+      setZoom(chosen.factor)
+      // Un livello ottico accende un altro obiettivo e l'anteprima riparte;
+      // uno digitale cambia solo il ritaglio, senza toccare lo stream.
+      setLensDeviceId(chosen.deviceId)
     },
-    [applyZoom, zoomRange],
-  )
-
-  const handleCameraDeviceChange = useCallback(
-    (deviceId: string) => {
-      if (isCaptureRunning || !deviceId) return
-      setCaption('')
-      setSessionError(null)
-      setSelectedDeviceId(deviceId)
-    },
-    [isCaptureRunning],
+    [zoomChoices],
   )
 
   useEffect(() => {
@@ -750,11 +766,6 @@ export function Dashboard() {
         ? 'is-pending'
         : 'is-idle'
   const startDisabled = !isWebcamActive || Boolean(webcamError) || !webSocketUrl
-  const selectedCameraId = resolveAvailableCameraId(
-    cameraDevices,
-    selectedDeviceId,
-    activeDeviceId,
-  )
 
   return (
     <div className="vision-app">
@@ -762,7 +773,10 @@ export function Dashboard() {
       <main className="camera-stage" ref={stageRef}>
         <video
           ref={videoRef}
-          className={`camera-preview${isMirrored ? ' is-mirrored' : ''}`}
+          className="camera-preview"
+          style={{
+            transform: `scale(${isMirrored ? -activeZoom.digital : activeZoom.digital}, ${activeZoom.digital})`,
+          }}
           autoPlay
           playsInline
           muted
@@ -829,50 +843,6 @@ export function Dashboard() {
                 <span>{serverLabel}</span>
               </span>
             </div>
-
-            <CameraControls
-              facing={facing}
-              onFacingChange={handleFacingChange}
-              zoom={effectiveZoom}
-              zoomRange={zoomRange}
-              onZoomChange={handleZoomChange}
-              disabled={isCaptureRunning}
-            />
-
-            <div className="camera-device-control">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M14.5 6.5 16 4h2l1.5 2.5H21a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h11.5ZM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-              </svg>
-              <label className="sr-only" htmlFor="camera-device">
-                Altri obiettivi della fotocamera
-              </label>
-              <select
-                id="camera-device"
-                value={selectedCameraId}
-                onChange={(event) => handleCameraDeviceChange(event.target.value)}
-                disabled={isCaptureRunning || cameraDevices.length === 0}
-                aria-describedby={cameraDevicesError ? 'camera-device-error' : undefined}
-              >
-                {cameraDevices.length === 0 ? (
-                  <option value="">
-                    {cameraDevicesError
-                      ? 'Selezione non disponibile'
-                      : 'Ricerca fotocamere…'}
-                  </option>
-                ) : (
-                  cameraDevices.map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-            {cameraDevicesError && (
-              <span className="sr-only" id="camera-device-error">
-                {cameraDevicesError}
-              </span>
-            )}
 
             {/* La guida parla: riaprirla durante l'analisi si sovrapporrebbe
                 alle descrizioni, quindi il pulsante c'è solo da fermi. */}
@@ -946,12 +916,11 @@ export function Dashboard() {
             stepIndex={tutorial.stepIndex}
             stepCount={tutorial.stepCount}
             isVoiceEnabled={tutorial.isVoiceEnabled}
-            cameraDevices={cameraDevices}
-            selectedCameraId={selectedCameraId}
             captionMode={captionMode}
-            onCameraChange={handleCameraDeviceChange}
             onModeChange={handleCaptionModeChange}
-            practiceCaption={tutorial.step?.practice ? caption : undefined}
+            isPracticeRunning={Boolean(practiceMode) && isCaptureRunning}
+            practiceCaption={practiceMode ? caption : undefined}
+            onPracticeStart={handlePracticeStart}
             onNext={handleTutorialNext}
             onSkip={handleTutorialClose}
             onRepeat={tutorial.repeat}
@@ -960,6 +929,14 @@ export function Dashboard() {
         )}
 
         <footer className="camera-controls">
+          <CameraControls
+            facing={facing}
+            onFacingChange={handleFacingChange}
+            zoom={activeZoom.factor}
+            options={zoomChoices}
+            onZoomChange={handleZoomChange}
+            disabled={!isWebcamActive}
+          />
           <button
             className={`capture-button${isCaptureRunning ? ' is-running' : ''}`}
             type="button"

@@ -14,7 +14,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TUTORIAL_STEPS } from '../src/domain/tutorial.ts'
+import { spokenText, TUTORIAL_STEPS } from '../src/domain/tutorial.ts'
 
 const apiKey = process.env.ELEVENLABS_API_KEY
 const voiceId = process.env.ELEVENLABS_VOICE_ID ?? '21m00Tcm4TlvDq8ikWAM'
@@ -54,11 +54,12 @@ const synthesize = async (text: string): Promise<ArrayBuffer> => {
 }
 
 for (const step of TUTORIAL_STEPS) {
-  if (!step.voice || !step.audio) continue
+  const testo = spokenText(step)
+  if (!testo || !step.audio) continue
 
   const destination = path.join(publicDir, step.audio)
   await mkdir(path.dirname(destination), { recursive: true })
-  const audio = await synthesize(step.voice)
+  const audio = await synthesize(testo)
   await writeFile(destination, Buffer.from(audio))
   console.log(`${step.id}: ${Math.round(audio.byteLength / 1024)} kB → public${step.audio}`)
 }

@@ -31,10 +31,6 @@
   object-fit: contain;
 }
 
-.camera-preview.is-mirrored {
-  transform: scaleX(-1);
-}
-
 .camera-scrim {
   position: absolute;
   inset-inline: 0;
@@ -73,8 +69,7 @@
 }
 
 .server-status,
-.mode-control,
-.camera-device-control {
+.mode-control {
   pointer-events: auto;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(11, 14, 18, 0.86);
@@ -104,52 +99,6 @@
   border-color: rgba(255, 115, 115, 0.38);
   background: #ff7373;
   box-shadow: 0 0 0 4px rgba(255, 115, 115, 0.14);
-}
-
-.camera-device-control {
-  width: 100%;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 9px;
-  border-radius: 14px;
-}
-
-.camera-device-control svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  fill: #d7dbe1;
-}
-
-.camera-device-control select {
-  width: 100%;
-  min-width: 0;
-  min-height: 34px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-.camera-device-control:has(select:focus-visible) {
-  outline: 3px solid #f2b84b;
-  outline-offset: 2px;
-}
-
-.camera-device-control select:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
-}
-
-.camera-device-control select option {
-  color: #111820;
-  background: #fff;
 }
 
 .server-status-dot {
@@ -334,6 +283,9 @@
   overflow-wrap: anywhere;
 }
 
+/* In fondo stanno i comandi della fotocamera e poi l'avvio, nell'ordine in
+   cui li cerca la mano: lo zoom si regola prima di far partire le
+   descrizioni, e il pulsante grande resta l'ultimo, il più vicino al pollice. */
 .camera-controls {
   position: absolute;
   z-index: 3;
@@ -341,7 +293,9 @@
   right: 0;
   bottom: 0;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   padding:
     12px
     max(16px, env(safe-area-inset-right))

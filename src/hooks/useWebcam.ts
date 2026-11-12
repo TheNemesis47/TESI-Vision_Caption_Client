@@ -1,12 +1,6 @@
-import {useCallback, useRef, useState, useEffect} from "react";
+import {useRef, useState, useEffect} from "react";
 
-import {
-    DEFAULT_FACING,
-    clampZoom,
-    readZoomRange,
-    type CameraFacing,
-    type ZoomRange,
-} from "../domain/cameraControls";
+import {DEFAULT_FACING, type CameraFacing} from "../domain/cameraZoom";
 
 type UseWebcamOptions = {
     deviceId?: string;
@@ -24,6 +18,14 @@ const REAR_CAMERA_FALLBACK_ERRORS = new Set([
     'OverconstrainedError',
 ]);
 
+/**
+ * L'anteprima e l'obiettivo acceso.
+ *
+ * Lo zoom non passa da qui: su Safari `applyConstraints({zoom})` non fa
+ * niente, e il telefono cambia ingrandimento cambiando obiettivo. Qui arriva
+ * già il deviceId del vetro scelto; il resto dell'ingrandimento è un ritaglio
+ * al momento della cattura.
+ */
 export function useWebcam({
     deviceId,
     enabled = true,
@@ -34,27 +36,6 @@ export function useWebcam({
     const [isMirrored, setIsMirrored] = useState<boolean>(false);
     const [activeDeviceId, setActiveDeviceId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
-    // Lo zoom vive sul track: cambiando fotocamera cambia la corsa, e a
-    // volte sparisce del tutto.
-    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
-    const [zoomRange, setZoomRange] = useState<ZoomRange | null>(null);
-
-    const applyZoom = useCallback(async (value: number): Promise<number | null> => {
-        const track = videoTrackRef.current;
-        const range = readZoomRange(track);
-        if (!track?.applyConstraints || !range) return null;
-        const wanted = clampZoom(value, range);
-        try {
-            // Lo zoom non è ancora nei tipi standard di MediaTrackConstraints.
-            await track.applyConstraints({
-                advanced: [{zoom: wanted}],
-            } as unknown as MediaTrackConstraints);
-            return wanted;
-        } catch {
-            // Un obiettivo che rifiuta lo zoom non deve fermare l'anteprima.
-            return null;
-        }
-    }, []);
 
     useEffect(() => {
         //setup
@@ -74,7 +55,6 @@ export function useWebcam({
             setIsActive(false);
             setIsMirrored(false);
             setActiveDeviceId('');
-            setZoomRange(null);
             setError(null);
         });
 
@@ -98,9 +78,22 @@ export function useWebcam({
         const start = async () => {
             try {
                 if (deviceId) {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: {deviceId: {exact: deviceId}},
-                    });
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: {deviceId: {exact: deviceId}},
+                        });
+                    } catch (lensError) {
+                        // Un obiettivo che sparisce (il telefono lo riserva a
+                        // un'altra app, o l'elenco è cambiato) non deve
+                        // spegnere l'anteprima: si torna a quello del verso.
+                        const errorName = lensError instanceof Error ? lensError.name : '';
+                        if (!REAR_CAMERA_FALLBACK_ERRORS.has(errorName)) {
+                            throw lensError;
+                        }
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: facingConstraints(facing),
+                        });
+                    }
                 } else {
                     try {
                         stream = await navigator.mediaDevices.getUserMedia({
@@ -123,8 +116,6 @@ export function useWebcam({
                 }
 
                 activeVideoTrack = stream.getVideoTracks()[0] ?? null;
-                videoTrackRef.current = activeVideoTrack;
-                setZoomRange(readZoomRange(activeVideoTrack));
                 const facingMode = activeVideoTrack?.getSettings?.().facingMode;
                 const nextActiveDeviceId = activeVideoTrack?.getSettings?.().deviceId;
                 setIsMirrored(facingMode === 'user');
@@ -149,7 +140,6 @@ export function useWebcam({
                 if (cancelled) return;
                 setIsMirrored(false);
                 setActiveDeviceId('');
-                setZoomRange(null);
                 setError("WebcamError - non disponibile: " + (e as Error).message);
             }
         };
@@ -164,12 +154,10 @@ export function useWebcam({
             }
             activeVideoTrack?.removeEventListener?.('ended', handleTrackEnded);
             stream?.getTracks().forEach((track) => track.stop());
-            videoTrackRef.current = null;
             setIsActive(false);
             setIsMirrored(false);
             setActiveDeviceId('');
-            setZoomRange(null);
         }
     }, [deviceId, enabled, facing])
-    return { videoRef, isActive, isMirrored, activeDeviceId, error, zoomRange, applyZoom };
+    return { videoRef, isActive, isMirrored, activeDeviceId, error };
 }

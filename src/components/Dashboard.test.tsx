@@ -7,23 +7,30 @@ import { rememberTutorialSeen } from '../domain/tutorial'
 
 const videoRef = createRef<HTMLVideoElement>()
 
+const IPHONE = [
+  { deviceId: 'ultra', label: 'Fotocamera con ultra-grandangolo (posteriore)' },
+  { deviceId: 'wide', label: 'Fotocamera posteriore' },
+  { deviceId: 'tele', label: 'Fotocamera con teleobiettivo (posteriore)' },
+  { deviceId: 'fronte', label: 'Fotocamera anteriore' },
+]
+
 const webcam = {
-  zoomRange: null as { min: number; max: number; step: number } | null,
-  applyZoom: vi.fn(async (value: number) => value),
   facing: '' as string,
+  /** L'obiettivo acceso: vuoto significa quello predefinito del verso. */
+  deviceId: '' as string | undefined,
 }
 
+const cameras = { devices: IPHONE as { deviceId: string; label: string }[] }
+
 vi.mock('../hooks/useWebcam', () => ({
-  useWebcam: (options: { facing?: string } = {}) => {
+  useWebcam: (options: { facing?: string; deviceId?: string } = {}) => {
     webcam.facing = options.facing ?? ''
+    webcam.deviceId = options.deviceId ?? ''
     return {
       videoRef,
       isActive: true,
       isMirrored: false,
-      activeDeviceId: 'camera-back',
       error: null,
-      zoomRange: webcam.zoomRange,
-      applyZoom: webcam.applyZoom,
     }
   },
 }))
@@ -33,10 +40,7 @@ vi.mock('../hooks/useCameraDevices', async (importOriginal) => {
   return {
     ...actual,
     useCameraDevices: () => ({
-      devices: [
-        { deviceId: 'camera-back', label: 'Fotocamera posteriore' },
-        { deviceId: 'camera-front', label: 'Fotocamera anteriore' },
-      ],
+      devices: cameras.devices,
       error: null,
       refresh: vi.fn(),
     }),
@@ -56,8 +60,7 @@ vi.mock('../hooks/useServerConnection', () => ({
 describe('Dashboard end-user', () => {
   beforeEach(() => {
     videoRef.current = null
-    webcam.zoomRange = null
-    webcam.applyZoom.mockClear()
+    cameras.devices = IPHONE
     window.localStorage.clear()
     // La vista ordinaria è quella di chi la guida l'ha già vista.
     rememberTutorialSeen()
@@ -71,9 +74,9 @@ describe('Dashboard end-user', () => {
     expect(screen.getByRole('radio', { name: 'Punta' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Avvia' })).toBeInTheDocument()
     expect(screen.getByText('Server')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Altri obiettivi della fotocamera' })).toHaveValue(
-      'camera-back',
-    )
+    // L'elenco dei dieci obiettivi non c'è più: restano i livelli di zoom.
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Livello di zoom' })).toBeInTheDocument()
 
     expect(container.querySelector('.detections-layer')).not.toBeInTheDocument()
     expect(container.querySelector('.pointing-overlay-layer')).not.toBeInTheDocument()
@@ -83,14 +86,16 @@ describe('Dashboard end-user', () => {
     expect(container.querySelector('canvas')).not.toBeInTheDocument()
   })
 
-  it('permette di scegliere la fotocamera prima dell’analisi', async () => {
-    const user = userEvent.setup()
+  it('i livelli di zoom sono quelli che il telefono può davvero fare', () => {
     render(<Dashboard />)
-    const cameraSelect = screen.getByRole('combobox', { name: 'Altri obiettivi della fotocamera' })
 
-    await user.selectOptions(cameraSelect, 'camera-front')
-
-    expect(cameraSelect).toHaveValue('camera-front')
+    expect(
+      screen.getAllByRole('button', { name: /^Zoom/ }).map((pulsante) => pulsante.textContent),
+    ).toEqual(['0,5×', '1×', '2×', '4×'])
+    expect(screen.getByRole('button', { name: 'Zoom 1 volta' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 })
 
@@ -127,51 +132,77 @@ describe('Dashboard e la guida', () => {
 describe('comandi della fotocamera', () => {
   beforeEach(() => {
     videoRef.current = null
+    cameras.devices = IPHONE
     window.localStorage.clear()
     rememberTutorialSeen()
-    webcam.zoomRange = null
-    webcam.applyZoom.mockClear()
   })
 
   it('parte dalla posteriore e il pulsante dice dove si va', async () => {
     render(<Dashboard />)
 
-    const toggle = screen.getByRole('button', {
-      name: 'Passa alla fotocamera frontale',
-    })
-    expect(toggle).toHaveTextContent('Fotocamera posteriore')
+    const giro = screen.getByRole('button', { name: 'Passa alla fotocamera frontale' })
     expect(webcam.facing).toBe('environment')
 
-    await userEvent.click(toggle)
+    await userEvent.click(giro)
 
     expect(webcam.facing).toBe('user')
     expect(
       screen.getByRole('button', { name: 'Passa alla fotocamera posteriore' }),
-    ).toHaveTextContent('Fotocamera frontale')
+    ).toBeInTheDocument()
   })
 
-  it('lo zoom non si mostra se l obiettivo non lo dichiara', () => {
+  it('davanti restano i livelli che una fotocamera sola può dare', async () => {
     render(<Dashboard />)
 
-    expect(screen.queryByRole('group', { name: 'Zoom' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Passa alla fotocamera frontale' }))
+
+    expect(
+      screen.getAllByRole('button', { name: /^Zoom/ }).map((pulsante) => pulsante.textContent),
+    ).toEqual(['1×', '2×'])
   })
 
-  it('con lo zoom disponibile i pulsanti lo spostano davvero', async () => {
-    webcam.zoomRange = { min: 1, max: 3, step: 0.5 }
+  it('senza ultra-grandangolo il livello 0,5 non compare', () => {
+    cameras.devices = [{ deviceId: 'wide', label: 'Fotocamera posteriore' }]
     render(<Dashboard />)
 
-    expect(screen.getByRole('group', { name: 'Zoom' })).toBeInTheDocument()
-    const slider = screen.getByRole('slider', { name: 'Zoom' })
-    expect(slider).toHaveAttribute('aria-valuetext', 'Zoom 1×')
-    // Al minimo della corsa non si può ridurre oltre.
-    expect(screen.getByRole('button', { name: 'Riduci lo zoom' })).toBeDisabled()
+    expect(
+      screen.getAllByRole('button', { name: /^Zoom/ }).map((pulsante) => pulsante.textContent),
+    ).toEqual(['1×', '2×', '4×'])
+  })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Aumenta lo zoom' }))
+  it('un livello ottico accende l obiettivo giusto, uno digitale no', async () => {
+    render(<Dashboard />)
+    expect(webcam.deviceId).toBe('')
 
-    expect(webcam.applyZoom).toHaveBeenCalledWith(1.5)
-    expect(screen.getByRole('slider', { name: 'Zoom' })).toHaveAttribute(
-      'aria-valuetext',
-      'Zoom 1,5×',
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom 0,5 volte' }))
+    expect(webcam.deviceId).toBe('ultra')
+    expect(screen.getByRole('button', { name: 'Zoom 0,5 volte' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom 2 volte' }))
+    expect(webcam.deviceId).toBe('tele')
+
+    // Senza teleobiettivo lo stesso livello non cambia obiettivo: ritaglia.
+    cameras.devices = [{ deviceId: 'wide', label: 'Fotocamera posteriore' }]
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom 1 volta' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom 2 volte' }))
+    expect(webcam.deviceId).toBe('')
+  })
+
+  it('girando la fotocamera lo zoom torna a 1, perché l obiettivo scelto non c è più', async () => {
+    render(<Dashboard />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom 0,5 volte' }))
+    expect(webcam.deviceId).toBe('ultra')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Passa alla fotocamera frontale' }))
+
+    expect(webcam.deviceId).toBe('')
+    expect(screen.getByRole('button', { name: 'Zoom 1 volta' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
     )
   })
 })
@@ -179,9 +210,8 @@ describe('comandi della fotocamera', () => {
 describe('prova guidata dentro il tutorial', () => {
   beforeEach(() => {
     videoRef.current = null
+    cameras.devices = IPHONE
     window.localStorage.clear()
-    webcam.zoomRange = null
-    webcam.applyZoom.mockClear()
     // Qui la guida non è stata vista: si apre da sola.
   })
 
@@ -189,7 +219,7 @@ describe('prova guidata dentro il tutorial', () => {
     await userEvent.click(screen.getByRole('button', { name: label }))
   }
 
-  it('fa provare prima l automatica e poi il puntamento, con la fotocamera accesa', async () => {
+  it('la fotocamera resta ferma finché non si preme Prova', async () => {
     render(<Dashboard />)
 
     await advance('Ascolta la guida')
@@ -199,25 +229,20 @@ describe('prova guidata dentro il tutorial', () => {
     expect(
       screen.getByRole('heading', { name: /prova la modalità automatica/i }),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('status', { name: 'Stato della prova' }),
-    ).toHaveTextContent('In ascolto')
     expect(screen.getByRole('radio', { name: 'Auto' })).toBeChecked()
-    // La cattura parte da sola: la prova non si fa a fotocamera spenta.
+    // Questo è il punto: con la cattura già avviata la descrizione arriverebbe
+    // mentre la guida sta ancora leggendo il passo, e le voci si coprirebbero.
+    expect(screen.getByRole('status', { name: 'Stato della prova' })).toHaveTextContent(
+      'Quando sei pronto premi Prova',
+    )
+    expect(screen.queryByRole('button', { name: 'Arresta' })).not.toBeInTheDocument()
+
+    await advance('Prova')
+
     expect(screen.getByRole('button', { name: 'Arresta' })).toBeInTheDocument()
-
-    await advance('Avanti')
-
-    expect(
-      screen.getByRole('heading', { name: /indicare col dito|indica col dito/i }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Punta' })).toBeChecked()
-
-    await advance('Avanti')
-
-    expect(screen.getByRole('heading', { name: 'Sei pronto' })).toBeInTheDocument()
-    // Finita la prova la cattura si ferma: riparte col pulsante Avvia.
-    expect(screen.getByRole('button', { name: 'Avvia' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Stato della prova' })).toHaveTextContent(
+      'In ascolto',
+    )
   })
 
   it('chiudere la guida durante una prova spegne la cattura', async () => {
@@ -226,6 +251,7 @@ describe('prova guidata dentro il tutorial', () => {
     await advance('Ascolta la guida')
     await advance('Avanti')
     await advance('Avanti')
+    await advance('Prova')
     expect(screen.getByRole('button', { name: 'Arresta' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Salta la guida' }))

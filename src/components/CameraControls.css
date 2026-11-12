@@ -1,52 +1,87 @@
-.camera-setup {
+/* La barra dello zoom sta sopra il pulsante di avvio, come sul telefono:
+   dove la mano arriva senza spostare la presa. */
+.camera-zoombar {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: auto;
 }
 
-.camera-facing {
+.zoom-levels {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(11, 14, 18, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.zoom-level {
+  /* 44 px è la misura minima di un bersaglio che si preme camminando. */
+  min-width: 44px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  /* Bersaglio grande: si preme con il telefono in mano, spesso al buio. */
-  min-height: 48px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.camera-facing svg {
-  width: 22px;
-  height: 22px;
-  fill: currentColor;
-  flex: none;
-}
-
-.camera-zoom {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.camera-zoom button {
-  min-width: 48px;
-  min-height: 48px;
-  border-radius: 12px;
-  font-size: 22px;
+  justify-content: center;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #f2f3f5;
+  font-size: 0.88rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   cursor: pointer;
 }
 
-.camera-zoom input[type='range'] {
-  flex: 1;
-  min-width: 90px;
-  height: 48px;
+.zoom-level.is-selected {
+  background: rgba(255, 255, 255, 0.16);
+  color: #f2b84b;
+  font-size: 0.96rem;
 }
 
-.camera-zoom-value {
-  min-width: 56px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 14px;
+.zoom-level:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.zoom-level:focus-visible,
+.camera-flip:focus-visible {
+  outline: 3px solid #f2b84b;
+  outline-offset: 2px;
+}
+
+.camera-flip {
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(11, 14, 18, 0.72);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.camera-flip svg {
+  width: 24px;
+  height: 24px;
+  fill: #f2f3f5;
+}
+
+.camera-flip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .zoom-level,
+  .camera-flip {
+    transition: background-color 120ms ease, color 120ms ease;
+  }
 }

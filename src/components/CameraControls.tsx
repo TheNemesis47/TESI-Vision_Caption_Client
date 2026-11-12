@@ -1,86 +1,66 @@
 import {
-  FACING_LABELS,
   facingToggleLabel,
   nextFacing,
-  stepZoom,
-  zoomLabel,
   type CameraFacing,
-  type ZoomRange,
-} from '../domain/cameraControls'
+  type ZoomOption,
+} from '../domain/cameraZoom'
 import './CameraControls.css'
 
 type CameraControlsProps = {
   facing: CameraFacing
   onFacingChange: (facing: CameraFacing) => void
   zoom: number
-  zoomRange: ZoomRange | null
-  onZoomChange: (zoom: number) => void
+  options: ZoomOption[]
+  onZoomChange: (factor: number) => void
   disabled?: boolean
 }
 
 /**
- * I due comandi che servono davvero: da che parte guarda la fotocamera e
- * quanto ingrandisce. L'elenco completo degli obiettivi resta altrove, per
- * chi lo vuole: su un telefono recente sono dieci voci dal nome quasi
- * identico, e letti da una sintesi vocale non aiutano a scegliere.
+ * I comandi della fotocamera messi dove il telefono li mette: i livelli di
+ * zoom in fila sopra il pulsante di avvio, e accanto il pulsante per girare
+ * l'obiettivo. Sono gli stessi due gesti dell'app Fotocamera, così chi li ha
+ * già usati non deve impararli di nuovo.
  */
 export default function CameraControls({
   facing,
   onFacingChange,
   zoom,
-  zoomRange,
+  options,
   onZoomChange,
   disabled = false,
 }: CameraControlsProps) {
   return (
-    <div className="camera-setup">
+    <div className="camera-zoombar">
+      <div className="zoom-levels" role="group" aria-label="Livello di zoom">
+        {options.map((option) => {
+          const selected = option.factor === zoom
+          return (
+            <button
+              key={option.factor}
+              type="button"
+              className={`zoom-level${selected ? ' is-selected' : ''}`}
+              onClick={() => onZoomChange(option.factor)}
+              disabled={disabled}
+              aria-pressed={selected}
+              aria-label={option.spoken}
+            >
+              <span aria-hidden="true">{option.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
       <button
         type="button"
-        className="camera-facing"
+        className="camera-flip"
         onClick={() => onFacingChange(nextFacing(facing))}
         disabled={disabled}
         aria-label={facingToggleLabel(facing)}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M14.5 6.5 16 4h2l1.5 2.5H21a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h11.5ZM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+          <path d="M12 7a5 5 0 0 1 4.9 6h2.04A7 7 0 0 0 12 5V2.5L8.5 6 12 9.5V7Zm0 10a5 5 0 0 1-4.9-6H5.06A7 7 0 0 0 12 19v2.5L15.5 18 12 14.5V17Z" />
         </svg>
-        <span>{FACING_LABELS[facing]}</span>
       </button>
-
-      {zoomRange && (
-        <div className="camera-zoom" role="group" aria-label="Zoom">
-          <button
-            type="button"
-            onClick={() => onZoomChange(stepZoom(zoom, zoomRange, -1))}
-            disabled={disabled || zoom <= zoomRange.min}
-            aria-label="Riduci lo zoom"
-          >
-            −
-          </button>
-          <input
-            type="range"
-            min={zoomRange.min}
-            max={zoomRange.max}
-            step={zoomRange.step}
-            value={zoom}
-            disabled={disabled}
-            onChange={(event) => onZoomChange(Number(event.target.value))}
-            aria-label="Zoom"
-            aria-valuetext={zoomLabel(zoom)}
-          />
-          <button
-            type="button"
-            onClick={() => onZoomChange(stepZoom(zoom, zoomRange, 1))}
-            disabled={disabled || zoom >= zoomRange.max}
-            aria-label="Aumenta lo zoom"
-          >
-            +
-          </button>
-          <span className="camera-zoom-value" aria-hidden="true">
-            {zoomLabel(zoom)}
-          </span>
-        </div>
-      )}
     </div>
   )
 }
