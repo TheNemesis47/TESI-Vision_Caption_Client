@@ -101,4 +101,14 @@ describe('la modalità dettata a parole', () => {
       JSON.parse((opzioni as RequestInit).body as string).description,
     ).toHaveLength(400)
   })
+
+  it('dentro l app il server ha un indirizzo, non un percorso relativo', async () => {
+    // Nel telefono la pagina sta nel pacchetto: «/modes» finirebbe lì dentro.
+    // Il percorso lo decide VITE_VISION_API_BASE a build.
+    const chiamata = risposta(201, { id: 'x', label: 'X' })
+    await createMode('una persona cieca in officina con gli attrezzi', chiamata)
+
+    const [indirizzo] = (chiamata as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(String(indirizzo).endsWith('/modes')).toBe(true)
+  })
 })

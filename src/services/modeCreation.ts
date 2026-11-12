@@ -19,6 +19,17 @@ export const DESCRIPTION_MAX_LENGTH = 400
 
 type FetchLike = typeof fetch
 
+/**
+ * Da dove sta il server.
+ *
+ * Nel browser la pagina e il server stanno sullo stesso indirizzo, e un
+ * percorso relativo basta. Dentro l'app iOS la pagina non sta su un
+ * indirizzo: sta nel telefono, e «/modes» finirebbe dentro il pacchetto.
+ */
+const apiBase = (import.meta.env.VITE_VISION_API_BASE ?? '')
+  .toString()
+  .replace(/\/$/, '')
+
 /** I messaggi degli errori che il server può dare, detti a chi ascolta. */
 const MESSAGES: Record<number, string> = {
   403: 'Questo server non lascia creare modalità nuove.',
@@ -44,7 +55,7 @@ export async function createMode(
   }
 
   try {
-    const risposta = await richiesta('/modes', {
+    const risposta = await richiesta(`${apiBase}/modes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ description: testo.slice(0, DESCRIPTION_MAX_LENGTH) }),
