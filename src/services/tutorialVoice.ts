@@ -12,6 +12,17 @@ import { spokenText, type TutorialStep } from '../domain/tutorial'
 export class TutorialVoice {
   private audio: HTMLAudioElement | null = null
   private utterance: SpeechSynthesisUtterance | null = null
+  // La guida parla alla velocità scelta nelle impostazioni: chi ascolta al
+  // doppio non vuole l'eccezione proprio nel primo contatto con l'app.
+  private rate = 1
+
+  setRate(rate: number): void {
+    this.rate = Number.isFinite(rate) && rate > 0 ? rate : 1
+    if (this.audio) {
+      this.audio.preservesPitch = true
+      this.audio.playbackRate = this.rate
+    }
+  }
 
   async speak(step: TutorialStep): Promise<void> {
     this.stop()
@@ -21,6 +32,8 @@ export class TutorialVoice {
     if (step.audio && typeof Audio !== 'undefined') {
       const audio = new Audio(step.audio)
       this.audio = audio
+      audio.preservesPitch = true
+      audio.playbackRate = this.rate
       try {
         await audio.play()
         return
@@ -51,6 +64,7 @@ export class TutorialVoice {
     }
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'it-IT'
+    utterance.rate = this.rate
     this.utterance = utterance
     speechSynthesis.cancel()
     speechSynthesis.speak(utterance)

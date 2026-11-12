@@ -7,7 +7,15 @@ export type AudioQueueItem = {
 type AudioElementLike = Pick<
   HTMLAudioElement,
   'src' | 'onended' | 'onerror' | 'pause' | 'play' | 'load' | 'removeAttribute'
->
+> & {
+  playbackRate?: number
+  /**
+   * Senza questo, l'audio accelerato alza il tono e la voce diventa
+   * caricaturale: chi ascolta a velocità doppia deve sentire la stessa voce,
+   * solo più svelta. Safari lo espone, i browser più vecchi no.
+   */
+  preservesPitch?: boolean
+}
 
 type ObjectUrlApi = Pick<typeof URL, 'createObjectURL' | 'revokeObjectURL'>
 
@@ -16,6 +24,8 @@ type AudioPlaybackQueueOptions = {
   objectUrlApi?: ObjectUrlApi
   onPlaybackError?: (error: unknown, item: AudioQueueItem) => void
   onQueueChange?: (pendingItems: number) => void
+  /** Moltiplicatore della velocità di riproduzione; 1 è la voce come nasce. */
+  rate?: number
 }
 
 export class AudioPlaybackQueue {
@@ -27,17 +37,43 @@ export class AudioPlaybackQueue {
   private activeUrl: string | null = null
   private playing = false
   private generation = 0
+  private rate = 1
 
   constructor({
     audio,
     objectUrlApi = URL,
     onPlaybackError,
     onQueueChange,
+    rate = 1,
   }: AudioPlaybackQueueOptions) {
     this.audio = audio
     this.objectUrlApi = objectUrlApi
     this.onPlaybackError = onPlaybackError
     this.onQueueChange = onQueueChange
+    this.setRate(rate)
+  }
+
+  /**
+   * La velocità scelta nelle impostazioni.
+   *
+   * Vale anche su ciò che sta suonando adesso: chi si accorge che la voce
+   * corre troppo cambia l'impostazione e deve sentire l'effetto su quella
+   * frase, non sulla prossima. Cambiare `src` azzera `playbackRate` in alcuni
+   * browser, quindi si rimette a ogni traccia.
+   */
+  setRate(rate: number) {
+    this.rate = Number.isFinite(rate) && rate > 0 ? rate : 1
+    this.applyRate()
+  }
+
+  private applyRate() {
+    try {
+      this.audio.preservesPitch = true
+      this.audio.playbackRate = this.rate
+    } catch {
+      // Un browser che rifiuta la velocità riproduce comunque la descrizione:
+      // meglio una voce lenta che nessuna voce.
+    }
   }
 
   enqueue(item: AudioQueueItem) {
@@ -89,6 +125,7 @@ export class AudioPlaybackQueue {
     this.activeUrl = this.objectUrlApi.createObjectURL(item.blob)
     this.audio.src = this.activeUrl
     this.audio.load()
+    this.applyRate()
     this.notifyQueueChange()
 
     let advanced = false

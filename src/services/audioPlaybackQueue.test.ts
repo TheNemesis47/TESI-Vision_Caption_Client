@@ -9,6 +9,8 @@ const flushPromises = () =>
 const createAudioHarness = () => {
   const audio = {
     src: '',
+    playbackRate: 1,
+    preservesPitch: false,
     onended: null as (() => void) | null,
     onerror: null as (() => void) | null,
     pause: vi.fn(),
@@ -83,5 +85,43 @@ describe('AudioPlaybackQueue', () => {
 
     expect(onPlaybackError).toHaveBeenCalledOnce()
     expect(audio.play).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('la velocità scelta nelle impostazioni', () => {
+  it('vale sulla traccia che parte', async () => {
+    const { audio, objectUrlApi } = createAudioHarness()
+    const queue = new AudioPlaybackQueue({ audio, objectUrlApi, rate: 1.5 })
+
+    queue.enqueue({ blob: new Blob(['a']), caption: 'uno', frameId: 1 })
+    await flushPromises()
+
+    expect(audio.playbackRate).toBe(1.5)
+    // Senza questo la voce accelerata diventa in falsetto.
+    expect(audio.preservesPitch).toBe(true)
+  })
+
+  it('vale subito su quella che sta già suonando', async () => {
+    const { audio, objectUrlApi } = createAudioHarness()
+    const queue = new AudioPlaybackQueue({ audio, objectUrlApi })
+
+    queue.enqueue({ blob: new Blob(['a']), caption: 'uno', frameId: 1 })
+    await flushPromises()
+    queue.setRate(2)
+
+    expect(audio.playbackRate).toBe(2)
+  })
+
+  it('una velocità impossibile non zittisce la descrizione', async () => {
+    const { audio, objectUrlApi } = createAudioHarness()
+    const queue = new AudioPlaybackQueue({ audio, objectUrlApi })
+
+    queue.setRate(0)
+    queue.setRate(Number.NaN)
+    queue.enqueue({ blob: new Blob(['a']), caption: 'uno', frameId: 1 })
+    await flushPromises()
+
+    expect(audio.playbackRate).toBe(1)
+    expect(audio.play).toHaveBeenCalled()
   })
 })

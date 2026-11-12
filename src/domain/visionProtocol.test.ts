@@ -4,6 +4,7 @@ import {
   getAudioFreshnessLimit,
   getAudioMimeType,
   getFrameOutputRejectionReason,
+  parseServerModes,
   parseVisionServerMessage,
   shouldDropAudioFrameByOrder,
 } from './visionProtocol'
@@ -68,6 +69,7 @@ describe('parseVisionServerMessage', () => {
         auto_fps: 2,
         pointing_fps: 10,
         max_in_flight: 1,
+        modes: [],
       },
     })
   })
@@ -88,6 +90,7 @@ describe('parseVisionServerMessage', () => {
         auto_fps: 2,
         pointing_fps: 10,
         max_in_flight: 1,
+        modes: [],
       },
     })
   })
@@ -460,5 +463,45 @@ describe('messaggio di cambio modalità', () => {
       kind: 'message',
       message: { mode: 'AUTO', min_frame_interval_ms: null },
     })
+  })
+})
+
+describe('le modalità dichiarate dal server', () => {
+  it('arrivano nella configurazione iniziale', () => {
+    const esito = parseVisionServerMessage({
+      type: 'stream_config',
+      fps: { AUTO: 2, POINTING: 10 },
+      max_in_flight: 1,
+      modes: [
+        { id: 'lesson', label: 'Lezione' },
+        { id: 'supermercato', label: 'Supermercato' },
+      ],
+    })
+
+    expect(esito.kind).toBe('message')
+    expect(
+      esito.kind === 'message' && esito.message.type === 'stream_config'
+        ? esito.message.modes
+        : null,
+    ).toEqual([
+      { id: 'lesson', label: 'Lezione' },
+      { id: 'supermercato', label: 'Supermercato' },
+    ])
+  })
+
+  it('una riga senza nome non diventa una scelta muta', () => {
+    expect(
+      parseServerModes([
+        { id: 'buona', label: 'Buona' },
+        { id: 'senza nome' },
+        { label: 'senza id' },
+        'non un oggetto',
+      ]),
+    ).toEqual([{ id: 'buona', label: 'Buona' }])
+  })
+
+  it('un server più vecchio che non le manda non rompe la connessione', () => {
+    expect(parseServerModes(undefined)).toEqual([])
+    expect(parseServerModes('tutte')).toEqual([])
   })
 })

@@ -11,6 +11,7 @@ const config = {
   auto_fps: 2,
   pointing_fps: 10,
   max_in_flight: 1,
+  modes: [],
 }
 
 describe('frame flow control', () => {

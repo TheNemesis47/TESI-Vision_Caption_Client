@@ -1,3 +1,5 @@
+import type { SessionPreferences } from './preferences'
+
 export const CAPTION_MODES = ['AUTO', 'POINTING'] as const
 
 export type CaptionMode = (typeof CAPTION_MODES)[number]
@@ -9,6 +11,14 @@ export type FramePacket = {
   frame_id: number
   caption_mode: CaptionMode
   pointing_coordinates: null
+  /**
+   * Le preferenze che cambiano le descrizioni viaggiano su ogni fotogramma,
+   * non in un messaggio a parte: quando i fotogrammi si accumulano il server
+   * tiene soltanto l'ultimo, e un messaggio di impostazioni finirebbe fra
+   * quelli scartati. Ripeterle costa qualche decina di byte a 2 fotogrammi
+   * al secondo e rende la scelta valida anche dopo una riconnessione.
+   */
+  preferences?: SessionPreferences
 }
 
 export type SentFrameMetadata = {
@@ -91,11 +101,19 @@ export type PointingOverlayMessage = {
   corridor: PointingCorridorStyle
 }
 
+/** Una modalità che il server dichiara di avere. */
+export type ServerMode = {
+  id: string
+  label: string
+}
+
 export type StreamConfigServerMessage = {
   type: 'stream_config'
   auto_fps: number
   pointing_fps: number
   max_in_flight: number
+  /** Le modalità fra cui si può scegliere; vuoto se il server è più vecchio. */
+  modes: ServerMode[]
 }
 
 export type FrameDoneServerMessage = {
@@ -245,6 +263,24 @@ const parsePointingCorridorStyle = (
   }
 }
 
+/**
+ * Le modalità dichiarate dal server, scartando quelle scritte male. Il
+ * pannello delle impostazioni le elenca così come arrivano: se una riga non
+ * ha identificativo e nome non è una scelta che si possa presentare a voce.
+ */
+export const parseServerModes = (raw: unknown): ServerMode[] => {
+  if (!Array.isArray(raw)) return []
+  const modes: ServerMode[] = []
+  for (const entry of raw) {
+    if (!isRecord(entry)) continue
+    const id = typeof entry.id === 'string' ? entry.id.trim() : ''
+    const label = typeof entry.label === 'string' ? entry.label.trim() : ''
+    if (!id || !label) continue
+    modes.push({ id: id.slice(0, 64), label: label.slice(0, 80) })
+  }
+  return modes
+}
+
 export const stripJpegDataUrlPrefix = (value: string) => {
   return value.replace(DATA_URL_PREFIX, '')
 }
@@ -253,10 +289,12 @@ export const buildFramePacket = ({
   imageBase64,
   frameId,
   captionMode,
+  preferences,
 }: {
   imageBase64: string
   frameId: number
   captionMode: CaptionMode
+  preferences?: SessionPreferences
 }): FramePacket => {
   if (!Number.isInteger(frameId) || frameId < 1) {
     throw new Error('frame_id deve essere un intero positivo')
@@ -267,12 +305,14 @@ export const buildFramePacket = ({
     throw new Error('Il frame JPEG Base64 è vuoto')
   }
 
-  return {
+  const packet: FramePacket = {
     image,
     frame_id: frameId,
     caption_mode: captionMode,
     pointing_coordinates: null,
   }
+  if (preferences) packet.preferences = preferences
+  return packet
 }
 
 export const getAudioMimeType = (format: AudioFormat) => {
@@ -368,6 +408,9 @@ export const parseVisionServerMessage = (raw: unknown): VisionMessageParseResult
         auto_fps: autoFps,
         pointing_fps: pointingFps,
         max_in_flight: parsed.max_in_flight,
+        // Un server più vecchio non le manda: l'elenco resta vuoto e il
+        // pannello non mostra la scelta invece di mostrarla vuota.
+        modes: parseServerModes(parsed.modes),
       },
     }
   }

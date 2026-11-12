@@ -8,7 +8,7 @@ import {
 } from '../domain/tutorial'
 import { TutorialVoice } from '../services/tutorialVoice'
 
-export function useTutorial() {
+export function useTutorial(speechRate = 1) {
   // La prima apertura decide da sola; le successive passano dal pulsante.
   const [isOpen, setIsOpen] = useState(() => !hasSeenTutorial())
   const [stepIndex, setStepIndex] = useState(0)
@@ -17,8 +17,11 @@ export function useTutorial() {
 
   const getVoice = useCallback(() => {
     voiceRef.current ??= new TutorialVoice()
+    // La guida parla alla velocità scelta nelle impostazioni: chi ascolta al
+    // doppio non vuole l'eccezione proprio al primo contatto con l'app.
+    voiceRef.current.setRate(speechRate)
     return voiceRef.current
-  }, [])
+  }, [speechRate])
 
   const speakCurrent = useCallback(
     (index: number) => {
@@ -63,6 +66,10 @@ export function useTutorial() {
     if (!enabled) voiceRef.current?.stop()
     setIsVoiceEnabled(enabled)
   }, [isVoiceEnabled])
+
+  useEffect(() => {
+    voiceRef.current?.setRate(speechRate)
+  }, [speechRate])
 
   useEffect(() => {
     return () => voiceRef.current?.stop()

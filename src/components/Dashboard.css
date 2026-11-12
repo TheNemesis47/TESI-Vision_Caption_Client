@@ -278,10 +278,16 @@
   border-radius: 14px;
   background: rgba(6, 8, 11, 0.88);
   color: #fff;
-  font-size: clamp(1rem, 2.6vw, 1.25rem);
+  /* La scala la decidono le impostazioni: la didascalia si legge, non si
+     ascolta soltanto, e chi è ipovedente la legge se è grande davvero. */
+  font-size: calc(clamp(1rem, 2.6vw, 1.25rem) * var(--scala-testo, 1));
   font-weight: 650;
   line-height: 1.4;
   text-align: center;
+  /* Con il testo molto grande la didascalia cresce verso l'alto e non
+     finisce sotto i comandi, e se la scena è prolissa si scorre. */
+  max-height: 46dvh;
+  overflow-y: auto;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
@@ -556,4 +562,27 @@
   color: #cfd6df;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem;
+}
+
+
+/* ----------------------------------------------------------- contrasto alto
+   Giallo su nero pieno: è la combinazione più richiesta in ipovisione, e
+   togliere ogni trasparenza vuol dire che il testo non deve più competere
+   con l'immagine della fotocamera che gli scorre sotto. */
+:root[data-contrasto='alto'] .caption-text {
+  border: 2px solid #ffe566;
+  background: #000;
+  color: #ffe566;
+  font-weight: 700;
+}
+
+:root[data-contrasto='alto'] .activity-status,
+:root[data-contrasto='alto'] .server-status {
+  background: #000;
+  border: 2px solid #ffe566;
+  color: #ffe566;
+}
+
+:root[data-contrasto='alto'] .camera-controls {
+  background: #000;
 }

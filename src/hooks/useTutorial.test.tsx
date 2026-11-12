@@ -5,11 +5,13 @@ import { TUTORIAL_STEPS } from '../domain/tutorial'
 
 const speak = vi.fn()
 const stop = vi.fn()
+const setRate = vi.fn()
 
 vi.mock('../services/tutorialVoice', () => ({
   TutorialVoice: class {
     speak = speak
     stop = stop
+    setRate = setRate
   },
 }))
 
@@ -18,6 +20,7 @@ describe('useTutorial', () => {
     window.localStorage.clear()
     speak.mockClear()
     stop.mockClear()
+    setRate.mockClear()
   })
 
   it('si apre da sola alla prima apertura e non torna dopo', () => {
@@ -85,5 +88,18 @@ describe('useTutorial', () => {
     act(() => result.current.repeat())
 
     expect(speak).toHaveBeenCalledWith(TUTORIAL_STEPS[1])
+  })
+})
+
+describe('la velocità della guida', () => {
+  it('è quella scelta nelle impostazioni, non una sua', () => {
+    const { result } = renderHook(() => useTutorial(1.75))
+
+    act(() => result.current.next())
+
+    // Chi ascolta al doppio non vuole l'eccezione proprio nella guida, che è
+    // il primo contatto con l'applicazione.
+    expect(setRate).toHaveBeenCalledWith(1.75)
+    expect(speak).toHaveBeenCalled()
   })
 })

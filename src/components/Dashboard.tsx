@@ -52,6 +52,14 @@ import TutorialOverlay from './TutorialOverlay'
 import { TUTORIAL_STEPS, type TutorialStep } from '../domain/tutorial'
 import { useTutorial } from '../hooks/useTutorial'
 import { AudioPlaybackQueue } from '../services/audioPlaybackQueue'
+import { SettingsPanel } from './SettingsPanel'
+import { usePreferences } from '../hooks/usePreferences'
+import { sessionPreferences } from '../domain/preferences'
+import {
+  downloadTranscript,
+  lessonTranscript,
+  transcriptFileName,
+} from '../domain/lessonTranscript'
 
 type PendingFrame = {
   frame: CapturedFrame
@@ -151,6 +159,19 @@ export function Dashboard() {
     useState<StreamConfigServerMessage | null>(null)
   const [isDescribing, setIsDescribing] = useState(false)
   const [sessionError, setSessionError] = useState<string | null>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  // Le descrizioni dette, per chi vuole rileggersele dopo la lezione.
+  const [descriptions, setDescriptions] = useState<string[]>([])
+
+  const { preferences, updatePreferences } = usePreferences()
+  // Le preferenze che cambiano le descrizioni viaggiano su ogni fotogramma.
+  const framePreferences = useMemo(
+    () => sessionPreferences(preferences),
+    [preferences],
+  )
+  // La velocità serve dentro callback che non si ricreano a ogni scelta: la
+  // coda audio nasce al primo audio ricevuto, che può essere molto dopo.
+  const speechRateRef = useRef(preferences.speechRate)
 
   const {
     message: pointingOverlay,
@@ -187,7 +208,7 @@ export function Dashboard() {
     [cameraDevices, facing],
   )
   const activeZoom = findZoomOption(zoomChoices, zoom)
-  const tutorial = useTutorial()
+  const tutorial = useTutorial(preferences.speechRate)
 
   const getAudioQueue = useCallback(() => {
     if (audioQueueRef.current) return audioQueueRef.current
@@ -196,6 +217,7 @@ export function Dashboard() {
 
     audioQueueRef.current = new AudioPlaybackQueue({
       audio: audioElement,
+      rate: speechRateRef.current,
       onQueueChange: (pendingItems) => setIsDescribing(pendingItems > 0),
       onPlaybackError: () => {
         setIsDescribing(false)
@@ -204,6 +226,20 @@ export function Dashboard() {
     })
     return audioQueueRef.current
   }, [])
+
+  useEffect(() => {
+    speechRateRef.current = preferences.speechRate
+    audioQueueRef.current?.setRate(preferences.speechRate)
+  }, [preferences.speechRate])
+
+  const handleSaveLesson = useCallback(() => {
+    downloadTranscript(lessonTranscript(descriptions), transcriptFileName())
+  }, [descriptions])
+
+  const handleRestartTutorial = useCallback(() => {
+    setIsSettingsOpen(false)
+    tutorial.open()
+  }, [tutorial])
 
   const stopAudioPlayback = useCallback(() => {
     audioQueueRef.current?.cancel()
@@ -277,6 +313,7 @@ export function Dashboard() {
       imageBase64: pendingFrame.frame.imageBase64,
       frameId,
       captionMode: pendingFrame.mode,
+      preferences: framePreferences,
     })
     const sendResult = sendJson(packet)
     if (!sendResult.sent) return
@@ -304,7 +341,14 @@ export function Dashboard() {
         sentFrameMetadataRef.current.delete(sentFrameId)
       }
     }
-  }, [clearDispatchRetry, getBufferedAmount, sendJson, serverConnectionStatus, streamConfig])
+  }, [
+    clearDispatchRetry,
+    framePreferences,
+    getBufferedAmount,
+    sendJson,
+    serverConnectionStatus,
+    streamConfig,
+  ])
 
   useEffect(() => {
     attemptDispatchRef.current = attemptDispatch
@@ -501,6 +545,7 @@ export function Dashboard() {
           message.frame_id,
         )
         setCaption(message.caption)
+        setDescriptions((current) => [...current, message.caption])
         audioQueue.enqueue({
           blob: audioBlob,
           caption: message.caption,
@@ -905,6 +950,20 @@ export function Dashboard() {
 
             {/* La guida parla: riaprirla durante l'analisi si sovrapporrebbe
                 alle descrizioni, quindi il pulsante c'è solo da fermi. */}
+            {!tutorial.isOpen && (
+              <button
+                className="guide-button"
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                aria-label="Impostazioni"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+                  <path d="M10.3 2h3.4l.4 2.3q.8.3 1.5.7l2.1-1 1.7 2.9-1.8 1.5q.1.4.1.9t-.1.9l1.8 1.5-1.7 2.9-2.1-1q-.7.4-1.5.7l-.4 2.3h-3.4l-.4-2.3q-.8-.3-1.5-.7l-2.1 1-1.7-2.9 1.8-1.5Q6 12.5 6 12t.1-.9L4.3 9.6 6 6.7l2.1 1q.7-.4 1.5-.7L10.3 2Z" />
+                </svg>
+              </button>
+            )}
+
             {!isCaptureRunning && !tutorial.isOpen && (
               <button
                 className="guide-button"
@@ -990,6 +1049,18 @@ export function Dashboard() {
             onSkip={handleTutorialClose}
             onRepeat={tutorial.repeat}
             onToggleVoice={tutorial.toggleVoice}
+          />
+        )}
+
+        {isSettingsOpen && (
+          <SettingsPanel
+            preferences={preferences}
+            onChange={updatePreferences}
+            onClose={() => setIsSettingsOpen(false)}
+            onRestartTutorial={isCaptureRunning ? undefined : handleRestartTutorial}
+            onSaveLesson={handleSaveLesson}
+            savedDescriptions={descriptions.length}
+            modes={streamConfig?.modes ?? []}
           />
         )}
 
