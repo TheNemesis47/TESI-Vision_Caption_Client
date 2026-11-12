@@ -649,13 +649,11 @@ export function Dashboard() {
     if (!captureActiveRef.current) startCapture()
   }, [startCapture, tutorial])
 
-  // Sentita la descrizione, la prova è finita: senza questo la fotocamera
-  // continuerebbe a descrivere mentre l'utente legge il riscontro.
+  // La prova resta accesa finché l'utente non passa oltre. Fermarla
+  // all'arrivo della descrizione sembrava più pulito, ma stopCapture azzera
+  // la didascalia, annulla l'audio in coda e chiude la connessione: la voce
+  // veniva tagliata sulla prima sillaba e il riscontro spariva.
   const practiceMode = tutorial.isOpen ? tutorial.step?.practice : undefined
-  useEffect(() => {
-    if (!practiceMode || !caption.trim()) return
-    if (captureActiveRef.current) stopCapture()
-  }, [caption, practiceMode, stopCapture])
 
   const handleCaptionModeChange = useCallback(
     (nextMode: CaptionMode) => {

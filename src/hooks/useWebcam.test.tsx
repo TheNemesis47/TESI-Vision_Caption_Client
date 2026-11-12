@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react'
+import { render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWebcam } from './useWebcam'
 
@@ -107,5 +107,81 @@ describe('useWebcam lifecycle', () => {
         'true',
       )
     })
+  })
+})
+
+type TracciaFinta = {
+  stop: ReturnType<typeof vi.fn>
+  addEventListener: ReturnType<typeof vi.fn>
+  getSettings: () => { deviceId: string; facingMode: string }
+}
+
+const ordine: string[] = []
+
+const flussoFinto = (deviceId: string) => {
+  const track: TracciaFinta = {
+    stop: vi.fn(() => ordine.push(`stop:${deviceId}`)),
+    addEventListener: vi.fn(),
+    getSettings: () => ({ deviceId, facingMode: 'environment' }),
+  }
+  return {
+    getTracks: () => [track],
+    getVideoTracks: () => [track],
+    track,
+  }
+}
+
+const installaFotocamera = () => {
+  const flussi = new Map<string, ReturnType<typeof flussoFinto>>()
+  const getUserMedia = vi.fn(async (constraints: MediaStreamConstraints) => {
+    const video = constraints.video as { deviceId?: { exact: string } }
+    const id = video?.deviceId?.exact ?? 'predefinita'
+    ordine.push(`apri:${id}`)
+    const flusso = flussoFinto(id)
+    flussi.set(id, flusso)
+    return flusso as unknown as MediaStream
+  })
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia, enumerateDevices: vi.fn(async () => []) },
+  })
+  return { getUserMedia, flussi }
+}
+
+afterEach(() => {
+  ordine.length = 0
+  vi.restoreAllMocks()
+})
+
+describe('cambio di obiettivo', () => {
+  it('accende il nuovo prima di spegnere il vecchio, per non richiedere di nuovo il permesso', async () => {
+    // Su Safari, spegnendo tutte le tracce il permesso torna da chiedere: a
+    // ogni pressione del pulsante ricompariva il pop-up della fotocamera.
+    const { getUserMedia, flussi } = installaFotocamera()
+    const { result, rerender } = renderHook(
+      ({ deviceId }: { deviceId: string }) => useWebcam({ deviceId, enabled: true }),
+      { initialProps: { deviceId: 'ultra' } },
+    )
+
+    await waitFor(() => expect(result.current.activeDeviceId).toBe('ultra'))
+    expect(flussi.get('ultra')?.track.stop).not.toHaveBeenCalled()
+
+    rerender({ deviceId: 'tele' })
+
+    await waitFor(() => expect(result.current.activeDeviceId).toBe('tele'))
+    expect(getUserMedia).toHaveBeenCalledTimes(2)
+    expect(ordine).toEqual(['apri:ultra', 'apri:tele', 'stop:ultra'])
+  })
+
+  it('alla chiusura la fotocamera si spegne davvero', async () => {
+    const { flussi } = installaFotocamera()
+    const { result, unmount } = renderHook(() =>
+      useWebcam({ deviceId: 'wide', enabled: true }),
+    )
+
+    await waitFor(() => expect(result.current.isActive).toBe(true))
+    unmount()
+
+    expect(flussi.get('wide')?.track.stop).toHaveBeenCalled()
   })
 })

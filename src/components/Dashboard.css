@@ -267,7 +267,10 @@
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: calc(max(96px, env(safe-area-inset-bottom) + 82px));
+  /* Sopra i comandi della fotocamera, non sopra il pulsante di avvio:
+     la barra dello zoom ha aggiunto una riga, e la descrizione ci finiva
+     sopra. 12 di padding + 52 di zoom + 12 di spazio + 56 di avvio. */
+  bottom: calc(max(158px, env(safe-area-inset-bottom) + 142px));
   width: min(calc(100% - 32px), 720px);
   transform: translateX(-50%);
   padding: 10px 14px;
